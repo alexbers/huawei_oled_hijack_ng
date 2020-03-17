@@ -32,8 +32,8 @@ struct led_widget {
     void (*init)();
     void (*deinit)();
     void (*paint)();
-    void (*power_key_handler)();
     void (*menu_key_handler)();
+    void (*power_key_handler)();
     uint32_t parent_idx;
 };
 

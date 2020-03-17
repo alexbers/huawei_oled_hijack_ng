@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <sys/wait.h>
+
 #include "oled.h"
 #include "oled_pictures.h"
 
@@ -119,7 +121,131 @@ void dispatch_menu_key() {
     repaint();
 }
 
-// THE MAIN WIDGET
+// ------------------------------ TASK LAUNCHING AND CONTROL LOGIC --------
+
+long process_output_fd = -1;
+pid_t child_pid = 0;
+uint32_t process_pooling_timer = 0;
+const int PROC_BUF_SIZE = 1024;
+char process_data_buf[PROC_BUF_SIZE + 1] = {0};
+int process_data_len = 0;
+void (*process_callback)(int, char *) = 0;
+
+void destroy_process();
+void proccess_poll();
+
+int create_process(char* command, void (*finish_callback)(int, char *)) {
+    if(child_pid) {
+        fprintf(stderr, "Attempted to create process where another one is alive, killing it\n");
+        destroy_process();
+    }
+    process_data_len = 0;
+    process_data_buf[0] = 0;
+
+    int pipe_fd[2] = {};
+
+    if (pipe2(pipe_fd, O_CLOEXEC | O_NONBLOCK) != 0) {
+        fprintf(stderr, "Failed to create pipe\n");
+        return 1;
+    }
+
+    pid_t fork_result = fork();
+
+    if (fork_result == -1) {
+        fprintf(stderr, "Failed to fork\n");
+        return 1;
+    }
+
+    if (fork_result == 0) {
+        // child
+        if (dup2(pipe_fd[1], 1) ==  -1) {
+            fprintf(stderr, "Failure on dup2 call\n");
+            exit(1);
+        }
+
+        execl("/bin/sh", "/bin/sh", "-c", command, NULL);
+        exit(1);
+    }
+
+    // parent
+    if (!process_pooling_timer) {
+        process_pooling_timer = timer_create_ex(25, 1, proccess_poll, 0);
+    }
+    child_pid = fork_result;
+    process_output_fd = pipe_fd[0];
+    process_callback = finish_callback;
+    return 0;
+}
+
+void process_consume_data() {
+    if (child_pid == 0) {
+        return;
+    }
+
+    if (process_data_len < PROC_BUF_SIZE) {
+        ssize_t read_result = read(process_output_fd, process_data_buf + process_data_len,
+                                   PROC_BUF_SIZE - process_data_len);
+
+        if (read_result > 0) {
+            process_data_len += read_result;
+            process_data_buf[process_data_len] = 0;
+        }
+    } else {
+        const int BUF_LEN = 64;
+        char buf[BUF_LEN];
+        // swallow the output
+        read(process_output_fd, buf, BUF_LEN);
+    }
+}
+
+void proccess_poll() {
+    if (child_pid == 0) {
+        destroy_process();
+        return;
+    }
+    fprintf(stderr, "process_poll\n");
+
+    process_consume_data();
+
+    int wstatus = 0;
+    pid_t pid = waitpid(child_pid, &wstatus, WNOHANG);
+
+    if(pid > 0) {
+        process_consume_data();
+        void (*saved_callback)(int, char *) = process_callback;
+        destroy_process();
+
+        if (saved_callback) {
+            int good = (WIFEXITED(wstatus) && !WIFSIGNALED(wstatus) && WEXITSTATUS(wstatus) == 0);
+            saved_callback(good, process_data_buf);
+        }
+    } else if (pid == -1 && errno == ECHILD) {
+        child_pid = 0;
+        destroy_process();
+    }
+}
+
+void destroy_process() {
+    if (child_pid) {
+        kill(child_pid, SIGKILL);
+        child_pid = 0;
+    }
+    if(process_output_fd != -1) { 
+        close(process_output_fd);
+        process_output_fd = -1;
+    }
+    process_callback = 0;
+}
+
+void destroy_process_pooler() {
+    // the timers implemented as threads, so destroy them as rare as possible
+    if(process_pooling_timer) {
+        timer_delete_ex(process_pooling_timer);
+        process_pooling_timer = 0;
+    }
+}
+
+// ---------------------------------- THE MAIN WIDGET ---------------------
 
 uint8_t main_current_item;
 
@@ -159,6 +285,9 @@ void main_power_key_pressed() {
         case 0: 
             notify_handler_async(SUBSYSTEM_GPIO, BUTTON_LONGMENU, 0);
             break;
+        case 2:
+            enter_widget(1);
+            break;
         case 3:
             enter_widget(2);
             break;
@@ -176,6 +305,34 @@ void main_menu_key_pressed() {
     if (main_current_item >= main_lines_num) {
         main_current_item = 0;
     }
+}
+
+// ---------------------------------- MOBILE SIGNAL --------------------------
+
+char mobile_data[PROC_BUF_SIZE] = {};
+
+void mobile_process_callback(int good, char *buf) {
+    fprintf(stderr, "BAY process_callback good = %d buf = %s\n", good, buf);
+    if (good) {
+        memcpy(mobile_data, buf, PROC_BUF_SIZE);
+    }
+    repaint();
+}
+
+void mobile_signal_init() {
+    fprintf(stderr, "BAY mobile_signal_init\n");
+    mobile_data[0] = 0;
+
+    create_process("/system/bin/date", mobile_process_callback);
+}
+
+void mobile_signal_deinit() {
+    destroy_process();
+    destroy_process_pooler();
+}
+
+void mobile_signal_paint() {
+    put_small_text(10, 10, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, mobile_data);
 }
 
 // -------------------------------------- MATRIX -----------------------------
@@ -396,14 +553,14 @@ void snake_turn_left() {
     if (snake_dead) {
         leave_widget();
     }
-    snake_direction = (snake_direction + 4 - 1) % 4;
+    snake_direction = (snake_direction + 1) % 4;
 }
 
 void snake_turn_right() {
     if (snake_dead) {
         leave_widget();
     }
-    snake_direction = (snake_direction + 1) % 4;
+    snake_direction = (snake_direction + 4 - 1) % 4;
 }
 
 struct led_widget widgets[] = {
@@ -413,18 +570,18 @@ struct led_widget widgets[] = {
         .init = main_init,
         .deinit = 0,
         .paint = main_paint,
-        .power_key_handler = main_power_key_pressed,
         .menu_key_handler = main_menu_key_pressed,
+        .power_key_handler = main_power_key_pressed,
         .parent_idx = 0
     },
     {
         .name = "mobile signal",
         .lcd_sleep_ms = 300000,
-        .init = matrix_init,
-        .deinit = matrix_deinit,
-        .paint = matrix_paint,
-        .power_key_handler = leave_widget,
+        .init = mobile_signal_init,
+        .deinit = mobile_signal_deinit,
+        .paint = mobile_signal_paint,
         .menu_key_handler = leave_widget,
+        .power_key_handler = leave_widget,
         .parent_idx = 0
     },    
     {
@@ -433,8 +590,8 @@ struct led_widget widgets[] = {
         .init = matrix_init,
         .deinit = matrix_deinit,
         .paint = matrix_paint,
-        .power_key_handler = leave_widget,
         .menu_key_handler = leave_widget,
+        .power_key_handler = leave_widget,
         .parent_idx = 0
     },    
     {
@@ -443,8 +600,8 @@ struct led_widget widgets[] = {
         .init = photo_init,
         .deinit = 0,
         .paint = photo_paint,
-        .power_key_handler = leave_widget,
         .menu_key_handler = photo_next,
+        .power_key_handler = leave_widget,
         .parent_idx = 0
     },    
     {
@@ -453,8 +610,8 @@ struct led_widget widgets[] = {
         .init = snake_init,
         .deinit = snake_deinit,
         .paint = snake_paint,
-        .power_key_handler = snake_turn_left,
-        .menu_key_handler = snake_turn_right,
+        .menu_key_handler = snake_turn_left,
+        .power_key_handler = snake_turn_right,
         .parent_idx = 0
     },    
 };
