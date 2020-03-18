@@ -1,10 +1,6 @@
 #define _GNU_SOURCE
 #include <stdlib.h>
-#include <dlfcn.h>
-#include <fcntl.h>
 #include <unistd.h>
-
-#include <sys/wait.h>
 
 #include "oled.h"
 #include "oled_pictures.h"
@@ -24,13 +20,17 @@ extern void put_large_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t r
 extern uint32_t (*timer_create_ex)(uint32_t, uint32_t, void (*)(), uint32_t);
 extern uint32_t (*timer_delete_ex)(uint32_t);
 
+int create_process(char* command, void (*finish_callback)(int, char *));
+void destroy_process();
+void destroy_process_pooler();
+
 extern struct lcd_screen secret_screen;
 
 uint32_t active_widget = 0;
 
 // these are decared in the ends
 struct led_widget widgets[];
-const int WIDGETS_SIZE;
+const uint32_t WIDGETS_SIZE;
 
 uint32_t lcd_timer = 0;
 uint32_t lcd_state = LED_ON;
@@ -88,6 +88,10 @@ void leave_widget() {
     if (widgets[active_widget].deinit) {
         widgets[active_widget].deinit();
     }
+
+    destroy_process_pooler();
+    destroy_process();
+
     active_widget = widgets[active_widget].parent_idx;
     reschedule_lcd_timer();
     lcd_turn_on();
@@ -95,7 +99,7 @@ void leave_widget() {
 }
 
 void reset_widgets() {
-    for(int widget = 0; widget < WIDGETS_SIZE; widget += 1) {
+    for(uint32_t widget = 0; widget < WIDGETS_SIZE; widget += 1) {
         if(widgets[widget].deinit) {
             widgets[widget].deinit();
         }
@@ -124,133 +128,6 @@ void dispatch_menu_key() {
     repaint();
 }
 
-// ------------------------------ TASK LAUNCHING AND CONTROL LOGIC --------
-
-long process_output_fd = -1;
-pid_t child_pid = 0;
-uint32_t process_pooling_timer = 0;
-const int PROC_BUF_SIZE = 2048;
-char process_data_buf[PROC_BUF_SIZE + 1] = {0};
-int process_data_len = 0;
-void (*process_callback)(int, char *) = 0;
-
-void destroy_process();
-void proccess_poll();
-
-int create_process(char* command, void (*finish_callback)(int, char *)) {
-    if(child_pid) {
-        fprintf(stderr, "Attempted to create process where another one is alive, killing it\n");
-        destroy_process();
-    }
-    process_data_len = 0;
-    process_data_buf[0] = 0;
-
-    int pipe_fd[2] = {};
-
-    if (pipe2(pipe_fd, O_CLOEXEC | O_NONBLOCK) != 0) {
-        fprintf(stderr, "Failed to create pipe\n");
-        return 1;
-    }
-
-    pid_t fork_result = fork();
-
-    if (fork_result == -1) {
-        fprintf(stderr, "Failed to fork\n");
-        return 1;
-    }
-
-    if (fork_result == 0) {
-        // child
-        if (dup2(pipe_fd[1], 1) ==  -1) {
-            fprintf(stderr, "Failure on dup2 call\n");
-            exit(1);
-        }
-
-        execl("/bin/sh", "/bin/sh", "-c", command, NULL);
-        exit(1);
-    }
-
-    // parent
-    close(pipe_fd[1]);
-    if (!process_pooling_timer) {
-        process_pooling_timer = timer_create_ex(25, 1, proccess_poll, 0);
-    }
-    child_pid = fork_result;
-    process_output_fd = pipe_fd[0];
-    process_callback = finish_callback;
-    return 0;
-}
-
-void process_consume_data() {
-    if (child_pid == 0) {
-        return;
-    }
-
-    if (process_data_len < PROC_BUF_SIZE) {
-        ssize_t read_result = read(process_output_fd, process_data_buf + process_data_len,
-                                   PROC_BUF_SIZE - process_data_len);
-
-        if (read_result > 0) {
-            process_data_len += read_result;
-            process_data_buf[process_data_len] = 0;
-        }
-    } else {
-        const int BUF_LEN = 64;
-        char buf[BUF_LEN];
-        // swallow the output
-        read(process_output_fd, buf, BUF_LEN);
-    }
-}
-
-void proccess_poll() {
-    if (child_pid == 0) {
-        destroy_process();
-        return;
-    }
-
-    process_consume_data();
-
-    int wstatus = 0;
-    pid_t pid = waitpid(child_pid, &wstatus, WNOHANG);
-
-    if(pid > 0) {
-        process_consume_data();
-        void (*saved_callback)(int, char *) = process_callback;
-        destroy_process();
-
-        if (saved_callback) {
-            int good = (WIFEXITED(wstatus) && !WIFSIGNALED(wstatus) && WEXITSTATUS(wstatus) == 0);
-            saved_callback(good, process_data_buf);
-        }
-    } else if (pid == -1 && errno == ECHILD) {
-        child_pid = 0;
-        destroy_process();
-    }
-}
-
-void destroy_process() {
-    if (child_pid) {
-        int wstatus = 0;
-
-        kill(child_pid, SIGKILL);
-        waitpid(child_pid, &wstatus, 0);
-
-        child_pid = 0;
-    }
-    if(process_output_fd != -1) { 
-        close(process_output_fd);
-        process_output_fd = -1;
-    }
-    process_callback = 0;
-}
-
-void destroy_process_pooler() {
-    // the timers implemented as threads, so destroy them as rare as possible
-    if(process_pooling_timer) {
-        timer_delete_ex(process_pooling_timer);
-        process_pooling_timer = 0;
-    }
-}
 
 // ---------------------------------- THE MAIN WIDGET ---------------------
 
@@ -258,8 +135,8 @@ uint8_t main_current_item;
 
 char *main_lines[] = {
     "<Back>",
-    "Mobile net mode",
-    "Mobile signal",
+    "Signal info",
+    "Radio mode",
     "Matrix",
     "Photo",
     "Snake",
@@ -292,17 +169,20 @@ void main_power_key_pressed() {
         case 0: 
             notify_handler_async(SUBSYSTEM_GPIO, BUTTON_LONGMENU, 0);
             break;
-        case 2:
+        case 1:
             enter_widget(1);
             break;
-        case 3:
+        case 2:
             enter_widget(2);
             break;
-        case 4:
+        case 3:
             enter_widget(3);
             break;
-        case 5:
+        case 4:
             enter_widget(4);
+            break;
+        case 5:
+            enter_widget(5);
             break;
     }
 }
@@ -315,8 +195,6 @@ void main_menu_key_pressed() {
 }
 
 // ---------------------------------- MOBILE SIGNAL --------------------------
-
-// char mobile_data[PROC_BUF_SIZE] = {};
 
 uint32_t mobile_timer = 0;
 
@@ -405,8 +283,6 @@ void mobile_signal_init() {
 }
 
 void mobile_signal_deinit() {
-    destroy_process();
-    destroy_process_pooler();
     if (mobile_timer) {
         timer_delete_ex(mobile_timer);
         mobile_timer = 0;
@@ -485,7 +361,7 @@ void mobile_signal_text_paint() {
     }
 }
 
-uint8_t mobile_val_to_y(uint32_t val) {
+uint8_t mobile_val_to_y(int32_t val) {
         if (val > -51) {
             val = -51;
         }
@@ -547,6 +423,39 @@ void mobile_switch_mode() {
     mobile_graph_mode = !mobile_graph_mode;
     repaint();
 }
+
+// -------------------------------------- RADIO MODE -------------------------
+
+uint8_t radio_cur_item = 0;
+
+const int MAXMENUITEMS = 20;
+char menu_items[MAXMENUITEMS][256] = {};
+
+void radio_mode_process_callback(int isgood, char* buf) {
+
+}
+
+void radio_mode_init() {
+    radio_cur_item = 0;
+    create_process("/online/radio_mode.sh", mobile_process_callback);
+    for (int i = 0; i < MAXMENUITEMS; i += 1) {
+        menu_items[i][0] = 0;
+    }
+    strcpy(menu_items[0], "item:<back>");
+}
+
+void radio_mode_paint() {
+
+}
+
+void radio_mode_menu_key_pressed() {
+
+}
+
+void radio_mode_power_key_pressed() {
+
+}
+
 
 // -------------------------------------- MATRIX -----------------------------
 
@@ -636,7 +545,7 @@ void photo_paint() {
 uint8_t snake_direction = 0;
 int snake_score = 0;
 
-int snake_len = 0;
+uint32_t snake_len = 0;
 const uint32_t SNAKE_FIELD_WIDTH = 16;
 const uint32_t SNAKE_FIELD_HEIGHT = 14;
 const uint32_t SNAKE_MAX_LEN = 16 * 16;
@@ -645,8 +554,8 @@ const uint32_t SNAKE_SCORE_SPACE = 16;
 int snake_dead = 0;
 
 struct snake_point {
-    int8_t x;
-    int8_t y;
+    uint8_t x;
+    uint8_t y;
 } snake[SNAKE_MAX_LEN], goal_pos;
 
 uint32_t snake_timer = 0;
@@ -658,7 +567,7 @@ void snake_place_goal() {
         goal_pos.x = rand() % SNAKE_FIELD_WIDTH;
         goal_pos.y = rand() % SNAKE_FIELD_HEIGHT;
 
-        for (int j = 0; j < snake_len; j += 1) {
+        for (uint32_t j = 0; j < snake_len; j += 1) {
             if(goal_pos.x == snake[j].x && goal_pos.y == snake[j].y) {
                 pos_good = 0;
                 break;
@@ -688,7 +597,7 @@ void snake_tick() {
         next_head.y = snake[0].y + 1;
     }
 
-    for (int i = 0; i < snake_len; i += 1) {
+    for (uint32_t i = 0; i < snake_len; i += 1) {
         if (next_head.x == snake[i].x && next_head.y == snake[i].y) {
             snake_dead = 1;
         }
@@ -754,7 +663,7 @@ void snake_paint() {
     put_small_text(5, 1, LCD_WIDTH, SNAKE_SCORE_SPACE, 255, 255, 255, buf);
     put_rect(0, SNAKE_SCORE_SPACE - 1, LCD_WIDTH, 1, 255, 255, 255);
     
-    for (int i = 0; i < snake_len; i += 1) {
+    for (uint32_t i = 0; i < snake_len; i += 1) {
         put_rect(snake[i].x * SNAKE_SQUARE_SIZE, SNAKE_SCORE_SPACE + snake[i].y * SNAKE_SQUARE_SIZE,
                  SNAKE_SQUARE_SIZE, SNAKE_SQUARE_SIZE, 255, 255, 255);
     }
@@ -798,6 +707,16 @@ struct led_widget widgets[] = {
         .parent_idx = 0
     },    
     {
+        .name = "radio mode",
+        .lcd_sleep_ms = 15000,
+        .init = radio_mode_init,
+        .deinit = 0,
+        .paint = radio_mode_paint,
+        .menu_key_handler = radio_mode_menu_key_pressed,
+        .power_key_handler = radio_mode_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
         .name = "matrix",
         .lcd_sleep_ms = 300000,
         .init = matrix_init,
@@ -829,4 +748,4 @@ struct led_widget widgets[] = {
     },    
 };
 
-const int WIDGETS_SIZE = 5;
+const uint32_t WIDGETS_SIZE = 6;
