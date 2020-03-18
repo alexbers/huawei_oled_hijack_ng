@@ -171,6 +171,7 @@ int create_process(char* command, void (*finish_callback)(int, char *)) {
     }
 
     // parent
+    close(pipe_fd[1]);
     if (!process_pooling_timer) {
         process_pooling_timer = timer_create_ex(25, 1, proccess_poll, 0);
     }
@@ -527,7 +528,6 @@ void mobile_signal_graph_paint() {
             y_to -= 1;
         }
 
-
         for (int y = y_from; y <= y_to; y += 1) {
             mobile_put_pixel_colorized(x, y, -65, -75, -85, mobile_y_to_val(y));
         }
@@ -789,7 +789,7 @@ struct led_widget widgets[] = {
     },
     {
         .name = "mobile signal",
-        .lcd_sleep_ms = 300000,
+        .lcd_sleep_ms = 600000,
         .init = mobile_signal_init,
         .deinit = mobile_signal_deinit,
         .paint = mobile_signal_paint,
