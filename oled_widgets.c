@@ -9,6 +9,9 @@
 #include "oled.h"
 #include "oled_pictures.h"
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 extern void lcd_refresh_screen(struct lcd_screen*);
 extern int lcd_control_operate(int);
 extern int notify_handler_async(int subsystemid, int action, int subaction);
@@ -126,7 +129,7 @@ void dispatch_menu_key() {
 long process_output_fd = -1;
 pid_t child_pid = 0;
 uint32_t process_pooling_timer = 0;
-const int PROC_BUF_SIZE = 1024;
+const int PROC_BUF_SIZE = 2048;
 char process_data_buf[PROC_BUF_SIZE + 1] = {0};
 int process_data_len = 0;
 void (*process_callback)(int, char *) = 0;
@@ -203,7 +206,6 @@ void proccess_poll() {
         destroy_process();
         return;
     }
-    fprintf(stderr, "process_poll\n");
 
     process_consume_data();
 
@@ -227,7 +229,11 @@ void proccess_poll() {
 
 void destroy_process() {
     if (child_pid) {
+        int wstatus = 0;
+
         kill(child_pid, SIGKILL);
+        waitpid(child_pid, &wstatus, 0);
+
         child_pid = 0;
     }
     if(process_output_fd != -1) { 
@@ -309,30 +315,237 @@ void main_menu_key_pressed() {
 
 // ---------------------------------- MOBILE SIGNAL --------------------------
 
-char mobile_data[PROC_BUF_SIZE] = {};
+// char mobile_data[PROC_BUF_SIZE] = {};
+
+uint32_t mobile_timer = 0;
+
+uint8_t mobile_graph_mode = 1;
+
+int32_t mobile_rssi = 0;
+int32_t mobile_rsrq = 0;
+int32_t mobile_rsrp = 0;
+int32_t mobile_sinr = 0;
+int32_t mobile_rscp = 0;
+int32_t mobile_ecio = 0;
+int32_t mobile_ul_bw = 0;
+int32_t mobile_dl_bw = 0;
+
+const int32_t MAX_LAST_RSSI = 128;
+int32_t last_rssi[MAX_LAST_RSSI] = {};
 
 void mobile_process_callback(int good, char *buf) {
-    fprintf(stderr, "BAY process_callback good = %d buf = %s\n", good, buf);
-    if (good) {
-        memcpy(mobile_data, buf, PROC_BUF_SIZE);
+    if (!good) {
+        return;
     }
+
+    mobile_rssi = mobile_rsrq = mobile_rsrp = mobile_sinr = mobile_rscp = mobile_ecio = 0;
+    mobile_ul_bw = mobile_dl_bw = 0;
+
+    int offset = 0;
+
+    while (buf[offset]) {
+        int32_t val;
+
+        if (sscanf(&buf[offset], "<rssi>&gt;=%ddBm</rssi>", &val) == 1) {
+            mobile_rssi = val;
+        } else if (sscanf(&buf[offset], "<rssi>%ddBm</rssi>", &val) == 1) {
+            mobile_rssi = val;
+        } else if (sscanf(&buf[offset], "<rsrq>%ddB</rsrq>", &val) == 1) {
+            mobile_rsrq = val;
+        } else if (sscanf(&buf[offset], "<rsrp>%ddBm</rsrp>", &val) == 1) {
+            mobile_rsrp = val;
+        } else if (sscanf(&buf[offset], "<sinr>%ddB</sinr>", &val) == 1) {
+            mobile_sinr = val;
+        } else if (sscanf(&buf[offset], "<rscp>%ddBm</rscp>", &val) == 1) {
+            mobile_rscp = val;
+        } else if (sscanf(&buf[offset], "<ecio>%ddB</ecio>", &val) == 1) {
+            mobile_ecio = val;
+        } else if (sscanf(&buf[offset], "<ulbandwidth>%dMHz</ulbandwidth>", &val) == 1) {
+            mobile_ul_bw = val;
+        } else if (sscanf(&buf[offset], "<dlbandwidth>%dMHz</dlbandwidth>", &val) == 1) {
+            mobile_dl_bw = val;
+        }
+
+        while(buf[offset] != 0 && buf[offset] != '\n') {
+            offset += 1;
+        }
+
+        if(buf[offset] == '\n') {
+            offset += 1;
+        }
+    }
+
+    if (mobile_rssi) {
+        for(int i = MAX_LAST_RSSI - 1; i > 0; i -= 1) {
+            last_rssi[i] = last_rssi[i - 1];
+        }
+        last_rssi[0] = mobile_rssi;
+    }
+
     repaint();
 }
 
-void mobile_signal_init() {
-    fprintf(stderr, "BAY mobile_signal_init\n");
-    mobile_data[0] = 0;
+void update_measurements() {
+    create_process("/online/web_hook_client device signal 1 1", mobile_process_callback);
+}
 
-    create_process("/system/bin/date", mobile_process_callback);
+void mobile_signal_init() {
+    mobile_rssi = mobile_rsrq = mobile_rsrp = mobile_sinr = mobile_rscp = mobile_ecio = 0;
+    mobile_ul_bw = mobile_dl_bw = 0;
+
+    mobile_graph_mode = 1;
+
+    for (int i = 0; i < MAX_LAST_RSSI; i += 1) {
+        last_rssi[i] = 0;
+    }
+
+    update_measurements();
+    mobile_timer = timer_create_ex(1000, 1, update_measurements, 0);
 }
 
 void mobile_signal_deinit() {
     destroy_process();
     destroy_process_pooler();
+    if (mobile_timer) {
+        timer_delete_ex(mobile_timer);
+        mobile_timer = 0;
+    }
 }
 
+void mobile_print_val_colorized(int x, int y, int thresh1, int thresh2, int thresh3, int val, char* addition) {
+    char buf[256];
+    uint8_t r, g, b;
+
+    snprintf(buf, 256, "%d", val);
+    strcat(buf, addition);
+
+    if (val > thresh1) {
+        r = 0; g = 255; b = 0;
+    } else if (val > thresh2) {
+        r = 188; g = 255; b = 0;
+    } else if (val > thresh3) {
+        r = 255; g = 188; b = 0;
+    } else {
+        r = 255; g = 0; b = 0;
+    }
+
+    put_large_text(x, y, LCD_WIDTH, LCD_HEIGHT, r, g, b, buf);
+}
+
+void mobile_put_pixel_colorized(int x, int y, int thresh1, int thresh2, int thresh3, int val) {
+    uint8_t r, g, b;
+
+    if (val > thresh1) {
+        r = 0; g = 255; b = 0;
+    } else if (val > thresh2) {
+        r = 188; g = 255; b = 0;
+    } else if (val > thresh3) {
+        r = 255; g = 188; b = 0;
+    } else {
+        r = 255; g = 0; b = 0;
+    }
+
+    put_pixel(x, y, r, g, b);
+}
+
+void mobile_signal_text_paint() {
+    put_small_text(8, 8, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSSI");
+    mobile_print_val_colorized(53, 4, -65, -75, -85, mobile_rssi, "dBm");
+
+    if (mobile_rsrp != 0) {
+        put_small_text(8, 28, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSRP");
+        mobile_print_val_colorized(53, 24, -84, -102, -111, mobile_rsrp, "dBm");
+    } else if (mobile_rscp != 0) {
+        put_small_text(8, 28, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSCP");
+        mobile_print_val_colorized(53, 24, -65, -75, -85, mobile_rscp, "dBm");
+    }
+
+    if (mobile_rsrq != 0) {
+        put_small_text(8, 48, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSRQ");
+        mobile_print_val_colorized(53, 44, -5, -9, -12, mobile_rsrq, "dB");
+    } else if (mobile_ecio != 0) {
+        put_small_text(8, 48, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "EC/IO");
+        mobile_print_val_colorized(53, 44, -6, -9, -12, mobile_ecio, "dB");
+    }
+
+    if (mobile_sinr != 0) {
+        put_small_text(8, 68, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "SINR");
+        mobile_print_val_colorized(53, 64, 12, 10, 7, mobile_sinr, "dB");
+    }
+
+    if (mobile_ul_bw != 0) {
+        put_small_text(8, 88, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "UL BW");
+        mobile_print_val_colorized(53, 84, 12, 10, 7, mobile_ul_bw, "Mhz");
+    }
+
+    if (mobile_dl_bw != 0) {
+        put_small_text(8, 108, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "DL BW");
+        mobile_print_val_colorized(53, 104, 12, 10, 7, mobile_dl_bw, "Mhz");
+    }
+}
+
+uint8_t mobile_val_to_y(uint32_t val) {
+        if (val > -51) {
+            val = -51;
+        }
+
+        if (val < -105) {
+            val = -105;
+        }
+
+        uint8_t y = -(val + 51) * 2;
+        return y;
+}
+
+uint32_t mobile_y_to_val(uint8_t y) {
+    return -y/2 - 51;
+}
+
+
+void mobile_signal_graph_paint() {
+    put_small_text(8, 113, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSSI");
+    mobile_print_val_colorized(53, 109, -65, -75, -85, mobile_rssi, "dBm");
+
+    uint32_t prev_val = 0;
+
+    for (int i = 0; i < MAX_LAST_RSSI-1; i += 1) {
+        uint8_t x = LCD_WIDTH - i - 1;
+
+        if (last_rssi[i] == 0 || last_rssi[i + 1] == 0) {
+            continue;
+        }
+
+        uint8_t y_from = MIN(mobile_val_to_y(last_rssi[i]), mobile_val_to_y(last_rssi[i+1]));
+        uint8_t y_to = MAX(mobile_val_to_y(last_rssi[i]), mobile_val_to_y(last_rssi[i+1]));
+
+        if ((y_to - y_from) > 1) {
+            // more smooth lines
+            y_from += 1;
+        }
+        if ((y_to - y_from) > 2) {
+            // more smooth lines
+            y_to -= 1;
+        }
+
+
+        for (int y = y_from; y <= y_to; y += 1) {
+            mobile_put_pixel_colorized(x, y, -65, -75, -85, mobile_y_to_val(y));
+        }
+    }
+}
+
+
 void mobile_signal_paint() {
-    put_small_text(10, 10, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, mobile_data);
+    if (mobile_graph_mode) {
+        mobile_signal_graph_paint();
+    } else {
+        mobile_signal_text_paint();
+    }
+}
+
+void mobile_switch_mode() {
+    mobile_graph_mode = !mobile_graph_mode;
+    repaint();
 }
 
 // -------------------------------------- MATRIX -----------------------------
@@ -580,7 +793,7 @@ struct led_widget widgets[] = {
         .init = mobile_signal_init,
         .deinit = mobile_signal_deinit,
         .paint = mobile_signal_paint,
-        .menu_key_handler = leave_widget,
+        .menu_key_handler = mobile_switch_mode,
         .power_key_handler = leave_widget,
         .parent_idx = 0
     },    
