@@ -50,6 +50,9 @@ int create_process(char* command, void (*finish_callback)(int, char *)) {
             exit(1);
         }
 
+        setuid(0);
+        setgid(0);
+
         execl("/bin/sh", "/bin/sh", "-c", command, NULL);
         exit(1);
     }

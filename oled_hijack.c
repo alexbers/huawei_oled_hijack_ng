@@ -130,3 +130,12 @@ int register_notify_handler(int subsystemid, void *notify_handler_sync, void *no
     notify_handler_async_real = notify_handler_async_orig;
     return register_notify_handler_real(subsystemid, notify_handler_sync, notify_handler_async);
 }
+
+int setuid(uid_t u) {
+    // put uid to saved to be able to restore it when needed
+    return setresuid(u, u, 0);
+}
+
+int setgid(gid_t g) {
+    return setresgid(g, g, 0);
+}
