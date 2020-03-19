@@ -139,3 +139,14 @@ int setuid(uid_t u) {
 int setgid(gid_t g) {
     return setresgid(g, g, 0);
 }
+
+int prctl(int option, unsigned long arg2, unsigned long arg3,
+                 unsigned long arg4, unsigned long arg5) {
+    // not allowing to drop capabilities
+    (void) option;
+    (void) arg2;
+    (void) arg3;
+    (void) arg4;
+    (void) arg5;
+    return -1;
+}

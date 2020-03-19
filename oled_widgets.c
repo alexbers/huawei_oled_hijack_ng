@@ -137,12 +137,14 @@ char *main_lines[] = {
     "<Back>",
     "Signal info",
     "Radio mode",
+    "Fix TTL",
+    "Disable battery",
     "Matrix",
     "Photo",
     "Snake",
 };
 
-char main_lines_num = 6;
+char main_lines_num = 8;
 
 void main_init() {
     main_current_item = 0;
@@ -183,6 +185,12 @@ void main_power_key_pressed() {
             break;
         case 5:
             enter_widget(5);
+            break;
+        case 6:
+            enter_widget(6);
+            break;
+        case 7:
+            enter_widget(7);
             break;
     }
 }
@@ -518,11 +526,14 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
 
 void menu_process_callback(int isgood, char* buf, uint8_t* curr_item, char items[][MAXITEMLEN]) {
     if(!isgood) {
+        strcpy(items[0], "item:<Back>:");
         strcpy(items[1], "text:call error");
-        return;
+        for(int i = 2; i < MAXMENUITEMS; i += 1) {
+            items[i][0] = 0;
+        }
+    } else {
+        make_items_from_buf(buf, items);
     }
-
-    make_items_from_buf(buf, items);
     *curr_item = 0;
     repaint();
 }
@@ -561,6 +572,34 @@ void execute_menu_item(uint8_t curr_item, char items[][MAXITEMLEN], char *script
     fprintf(stderr, "calling: %s\n", command);
     create_process(command, callback);
 }
+// ---------------------------------- NO BATTERY MODE --------------------------
+
+char* no_battery_mode_script = "/online/no_battery_mode.sh";
+uint8_t no_battery_mode_menu_cur_item = 0;
+char no_battery_mode_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
+
+void no_battery_mode_process_callback(int isgood, char* buf) {
+    menu_process_callback(isgood, buf, &no_battery_mode_menu_cur_item, no_battery_mode_menu_items);
+}
+
+void no_battery_mode_init() {
+    init_menu(&no_battery_mode_menu_cur_item, no_battery_mode_menu_items);
+    create_process(no_battery_mode_script, no_battery_mode_process_callback);
+}
+
+void no_battery_mode_paint() {
+    paint_menu(no_battery_mode_menu_cur_item, no_battery_mode_menu_items);
+}
+
+void no_battery_mode_menu_key_pressed() {
+    next_menu_item(&no_battery_mode_menu_cur_item, no_battery_mode_menu_items);
+}
+
+void no_battery_mode_power_key_pressed() {
+    execute_menu_item(no_battery_mode_menu_cur_item, no_battery_mode_menu_items,
+                      no_battery_mode_script, no_battery_mode_process_callback);
+}
+
 
 // -------------------------------------- RADIO MODE -------------------------
 
@@ -588,6 +627,34 @@ void radio_mode_menu_key_pressed() {
 void radio_mode_power_key_pressed() {
     execute_menu_item(radio_mode_menu_cur_item, radio_mode_menu_items,
                       radio_mode_script, radio_mode_process_callback);
+}
+
+// --------------------------------------- FIX TTL - -------------------------
+
+char* fix_ttl_script = "/online/fix_ttl.sh";
+uint8_t fix_ttl_menu_cur_item = 0;
+char fix_ttl_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
+
+void fix_ttl_process_callback(int isgood, char* buf) {
+    menu_process_callback(isgood, buf, &fix_ttl_menu_cur_item, fix_ttl_menu_items);
+}
+
+void fix_ttl_init() {
+    init_menu(&fix_ttl_menu_cur_item, fix_ttl_menu_items);
+    create_process(fix_ttl_script, fix_ttl_process_callback);
+}
+
+void fix_ttl_paint() {
+    paint_menu(fix_ttl_menu_cur_item, fix_ttl_menu_items);
+}
+
+void fix_ttl_menu_key_pressed() {
+    next_menu_item(&fix_ttl_menu_cur_item, fix_ttl_menu_items);
+}
+
+void fix_ttl_power_key_pressed() {
+    execute_menu_item(fix_ttl_menu_cur_item, fix_ttl_menu_items,
+                      fix_ttl_script, fix_ttl_process_callback);
 }
 
 // -------------------------------------- MATRIX -----------------------------
@@ -850,6 +917,26 @@ struct led_widget widgets[] = {
         .parent_idx = 0
     },
     {
+        .name = "fix ttl",
+        .lcd_sleep_ms = 15000,
+        .init = fix_ttl_init,
+        .deinit = 0,
+        .paint = fix_ttl_paint,
+        .menu_key_handler = fix_ttl_menu_key_pressed,
+        .power_key_handler = fix_ttl_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
+        .name = "no battery mode",
+        .lcd_sleep_ms = 15000,
+        .init = no_battery_mode_init,
+        .deinit = 0,
+        .paint = no_battery_mode_paint,
+        .menu_key_handler = no_battery_mode_menu_key_pressed,
+        .power_key_handler = no_battery_mode_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
         .name = "matrix",
         .lcd_sleep_ms = 300000,
         .init = matrix_init,
@@ -881,4 +968,4 @@ struct led_widget widgets[] = {
     },    
 };
 
-const uint32_t WIDGETS_SIZE = 6;
+const uint32_t WIDGETS_SIZE = 8;
