@@ -151,12 +151,12 @@ void main_init() {
 void main_paint() {
     const int lines_per_page = 7;
 
-    const int first_page = main_current_item / lines_per_page * lines_per_page;
+    const int page_first_item = main_current_item / lines_per_page * lines_per_page;
 
-    for (int i = 0; i < lines_per_page && first_page + i < main_lines_num; i += 1) {
-        char* cur_line = main_lines[first_page + i];
+    for (int i = 0; i < lines_per_page && page_first_item + i < main_lines_num; i += 1) {
+        char* cur_line = main_lines[page_first_item + i];
 
-        if (first_page + i == main_current_item) {
+        if (page_first_item + i == main_current_item) {
             put_small_text(5, 10 + i * 15, LCD_WIDTH, LCD_HEIGHT, 255,0,255, "#");
         }
         put_small_text(20, 10 + i * 15, LCD_WIDTH, LCD_HEIGHT, 255,255,255, cur_line);
@@ -424,36 +424,167 @@ void mobile_switch_mode() {
     repaint();
 }
 
+
+// ---------------------------- COMMON EXTERNAL MENU FUNCTIONS -------------------------
+const uint8_t MAXMENUITEMS = 32;
+const int MAXITEMLEN = 128;
+
+void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
+    char *saveptr;
+    strcpy(items[0], "item:<Back>:");
+    int item = 1;
+
+    char *line = strtok_r(buf, "\n", &saveptr);
+    while(line) {
+        if(strlen(line) >= MAXITEMLEN-1) {
+            fprintf(stderr, "line is too long: %s, aborting parse\n", line);
+            items[1][0] = 0;
+            break;
+        }
+
+        if (strncmp(line, "item:", 5) == 0 || strncmp(line, "text:", 5) == 0) {
+            strncpy(items[item], line, MAXITEMLEN);
+            item += 1;
+            if(item >= MAXMENUITEMS-1) {
+                break;
+            }
+        }
+
+        line = strtok_r(NULL, "\n", &saveptr);
+    }
+    for (int i = item; i < MAXMENUITEMS; i += 1) {
+        items[i][0] = 0;
+    }
+}
+
+void init_menu(uint8_t* curr_item, char items[][MAXITEMLEN]) {
+    *curr_item = 0;
+    strcpy(items[0], "item:<Back>:");
+    for (int i = 1; i < MAXMENUITEMS; i += 1) {
+        items[i][0] = 0;
+    }
+}
+
+void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
+    for(int i = 0; i < MAXMENUITEMS; i += 1) {
+        *curr_item += 1;
+        if (items[*curr_item][0] == 0 && *curr_item >= MAXMENUITEMS) {
+            *curr_item = 0;
+        }
+        if(strncmp(items[*curr_item], "item:", 5) == 0) {
+            return;
+        }
+    }
+}
+
+void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
+    const int lines_per_page = 7;
+
+    const int page_first_item = curr_item / lines_per_page * lines_per_page;
+
+    for (int i = 0; i < lines_per_page && items[page_first_item + i][0]; i += 1) {
+        char cur_line[MAXITEMLEN];
+        strncpy(cur_line, items[page_first_item + i], MAXITEMLEN);
+
+        int8_t y = 10 + i * 15;
+        if (page_first_item == 0 && i > 0) {
+            y += 8;
+        }
+
+        if (page_first_item + i == curr_item) {
+            put_small_text(5, y, LCD_WIDTH, LCD_HEIGHT, 255,0,255, "#");
+        }
+
+        char *saveptr;
+        char *item_type = strtok_r(cur_line, ":", &saveptr);
+        if (!item_type) {
+            continue;
+        }
+
+        char *item_text;
+        if (strcmp(item_type, "item") == 0) {
+            item_text = strtok_r(NULL, ":", &saveptr);
+        } else {
+            item_text = strtok_r(NULL, "\n", &saveptr);
+        }
+
+        if(!item_text) {
+            continue;
+        }
+
+        put_small_text(20, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, item_text);
+    }
+}
+
+void menu_process_callback(int isgood, char* buf, char items[][MAXITEMLEN]) {
+    if(!isgood) {
+        strcpy(items[1], "text:call error");
+        return;
+    }
+
+    make_items_from_buf(buf, items);
+    repaint();
+}
+
+void execute_menu_item(char* item, char *script_name, void (*callback)(int, char *)) {
+    const int MAXCOMMANDLEN = 256;
+    char item_copy[MAXITEMLEN];
+    char command[MAXCOMMANDLEN];
+
+    strncpy(item_copy, item, MAXITEMLEN);
+
+    char *saveptr;
+    if (!strtok_r(item_copy, ":", &saveptr)) {
+        fprintf(stderr, "wrong menu item format: %s\n", item_copy);
+        leave_widget();
+        return;
+    }
+
+    if(!strtok_r(NULL, ":", &saveptr)) {
+        return;
+    }
+
+    char *action = strtok_r(NULL, ":", &saveptr);
+    if(!action || strlen(action) == 0) {
+        leave_widget();
+        return;
+    }
+
+    if (snprintf(command, MAXCOMMANDLEN, "%s %s", script_name, action) >= MAXCOMMANDLEN) {
+        fprintf(stderr, "the command is too long: %s\n", command);
+        return;
+    }
+
+    fprintf(stderr, "calling: %s\n", command);
+    create_process(command, callback);
+}
+
 // -------------------------------------- RADIO MODE -------------------------
 
-uint8_t radio_cur_item = 0;
-
-const int MAXMENUITEMS = 20;
-char menu_items[MAXMENUITEMS][256] = {};
+char* radio_mode_script = "/online/radio_mode.sh";
+uint8_t radio_mode_menu_cur_item = 0;
+char radio_mode_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
 void radio_mode_process_callback(int isgood, char* buf) {
-
+    menu_process_callback(isgood, buf, radio_mode_menu_items);
 }
 
 void radio_mode_init() {
-    radio_cur_item = 0;
-    create_process("/online/radio_mode.sh", mobile_process_callback);
-    for (int i = 0; i < MAXMENUITEMS; i += 1) {
-        menu_items[i][0] = 0;
-    }
-    strcpy(menu_items[0], "item:<back>");
+    init_menu(&radio_mode_menu_cur_item, radio_mode_menu_items);
+    create_process(radio_mode_script, radio_mode_process_callback);
 }
 
 void radio_mode_paint() {
-
+    paint_menu(radio_mode_menu_cur_item, radio_mode_menu_items);
 }
 
 void radio_mode_menu_key_pressed() {
-
+    next_menu_item(&radio_mode_menu_cur_item, radio_mode_menu_items);
 }
 
 void radio_mode_power_key_pressed() {
-
+    execute_menu_item(radio_mode_menu_items[radio_mode_menu_cur_item], radio_mode_script,
+                      radio_mode_process_callback);
 }
 
 
