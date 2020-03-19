@@ -516,22 +516,25 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
     }
 }
 
-void menu_process_callback(int isgood, char* buf, char items[][MAXITEMLEN]) {
+void menu_process_callback(int isgood, char* buf, uint8_t* curr_item, char items[][MAXITEMLEN]) {
     if(!isgood) {
         strcpy(items[1], "text:call error");
         return;
     }
 
     make_items_from_buf(buf, items);
+    *curr_item = 0;
     repaint();
 }
 
-void execute_menu_item(char* item, char *script_name, void (*callback)(int, char *)) {
+void execute_menu_item(uint8_t curr_item, char items[][MAXITEMLEN], char *script_name,
+                       void (*callback)(int, char *))
+{
     const int MAXCOMMANDLEN = 256;
     char item_copy[MAXITEMLEN];
     char command[MAXCOMMANDLEN];
 
-    strncpy(item_copy, item, MAXITEMLEN);
+    strncpy(item_copy, items[curr_item], MAXITEMLEN);
 
     char *saveptr;
     if (!strtok_r(item_copy, ":", &saveptr)) {
@@ -566,7 +569,7 @@ uint8_t radio_mode_menu_cur_item = 0;
 char radio_mode_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
 void radio_mode_process_callback(int isgood, char* buf) {
-    menu_process_callback(isgood, buf, radio_mode_menu_items);
+    menu_process_callback(isgood, buf, &radio_mode_menu_cur_item, radio_mode_menu_items);
 }
 
 void radio_mode_init() {
@@ -583,10 +586,9 @@ void radio_mode_menu_key_pressed() {
 }
 
 void radio_mode_power_key_pressed() {
-    execute_menu_item(radio_mode_menu_items[radio_mode_menu_cur_item], radio_mode_script,
-                      radio_mode_process_callback);
+    execute_menu_item(radio_mode_menu_cur_item, radio_mode_menu_items,
+                      radio_mode_script, radio_mode_process_callback);
 }
-
 
 // -------------------------------------- MATRIX -----------------------------
 
