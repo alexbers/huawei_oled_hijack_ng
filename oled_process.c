@@ -23,7 +23,8 @@ void (*process_callback)(int, char *) = 0;
 
 int create_process(char* command, void (*finish_callback)(int, char *)) {
     if(child_pid) {
-        fprintf(stderr, "Attempted to create process where another one is alive, killing it\n");
+        fprintf(stderr, "Attempted to create process where "
+                        "another one, %d, is alive, killing it\n", child_pid);
         destroy_process();
     }
     process_data_len = 0;
@@ -119,8 +120,24 @@ void destroy_process() {
     if (child_pid) {
         int wstatus = 0;
 
-        kill(child_pid, SIGKILL);
-        waitpid(child_pid, &wstatus, 0);
+        int killer_pid = fork();
+        if (killer_pid == -1) {
+            fprintf(stderr, "Failed to fork\n");
+            return;
+        }
+
+        if (killer_pid == 0) {
+            setuid(0);
+            setgid(0);
+
+            if (kill(child_pid, SIGKILL) == -1) {
+                fprintf(stderr, "Failed to kill %d: %s\n", child_pid, strerror(errno));
+            } else {
+                waitpid(child_pid, &wstatus, 0);
+            }
+            exit(0);
+        }
+        waitpid(killer_pid, &wstatus, 0);
 
         child_pid = 0;
     }

@@ -1,6 +1,8 @@
 #ifndef OLED_H
 #define OLED_H
 
+#define UNUSED(x) (void)(x)
+
 #define SUBSYSTEM_GPIO 21002
 #define UI_MENU_EXIT 1006
 

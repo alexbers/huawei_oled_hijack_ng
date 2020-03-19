@@ -139,12 +139,13 @@ char *main_lines[] = {
     "Radio mode",
     "Fix TTL",
     "Disable battery",
+    "ADB daemon",
     "Matrix",
     "Photo",
     "Snake",
 };
 
-char main_lines_num = 8;
+char main_lines_num = 9;
 
 void main_init() {
     main_current_item = 0;
@@ -191,6 +192,9 @@ void main_power_key_pressed() {
             break;
         case 7:
             enter_widget(7);
+            break;
+        case 8:
+            enter_widget(8);
             break;
     }
 }
@@ -657,6 +661,44 @@ void fix_ttl_power_key_pressed() {
                       fix_ttl_script, fix_ttl_process_callback);
 }
 
+// --------------------------------------- ADBD -- -------------------------
+char* adbd_path = "/system/xbin/adbd";
+uint8_t adbd_running = 0;
+
+void adbd_process_callback(int isgood, char* buf) {
+    UNUSED(isgood);
+    UNUSED(buf);
+
+    adbd_running = 0;
+    repaint();
+}
+
+void adbd_init() {
+    adbd_running = 0;
+}
+
+void adbd_paint() {
+    if (adbd_running) {
+        put_large_text(13, 35, LCD_WIDTH, LCD_HEIGHT, 0, 255, 0, "ADBD is ON");
+        put_small_text(7, 80, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press any key to stop");
+    } else {
+        put_large_text(10, 35, LCD_WIDTH, LCD_HEIGHT, 255, 255, 0, "ADBD is OFF");
+        put_small_text(10, 80, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press Power to start");
+    }
+}
+
+void adbd_power_key_pressed() {
+    if(!adbd_running) {
+        adbd_running = 1;
+        create_process(adbd_path, adbd_process_callback);
+    } else {
+        adbd_running = 0;
+        destroy_process();
+        repaint();
+    }
+}
+
+
 // -------------------------------------- MATRIX -----------------------------
 
 uint32_t matrix_timer = 0;
@@ -937,6 +979,16 @@ struct led_widget widgets[] = {
         .parent_idx = 0
     },
     {
+        .name = "adbd",
+        .lcd_sleep_ms = 60000,
+        .init = adbd_init,
+        .deinit = 0,
+        .paint = adbd_paint,
+        .menu_key_handler = leave_widget,
+        .power_key_handler = adbd_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
         .name = "matrix",
         .lcd_sleep_ms = 300000,
         .init = matrix_init,
@@ -968,4 +1020,4 @@ struct led_widget widgets[] = {
     },    
 };
 
-const uint32_t WIDGETS_SIZE = 8;
+const uint32_t WIDGETS_SIZE = 9;

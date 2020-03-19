@@ -143,10 +143,10 @@ int setgid(gid_t g) {
 int prctl(int option, unsigned long arg2, unsigned long arg3,
                  unsigned long arg4, unsigned long arg5) {
     // not allowing to drop capabilities
-    (void) option;
-    (void) arg2;
-    (void) arg3;
-    (void) arg4;
-    (void) arg5;
+    UNUSED(option);
+    UNUSED(arg2);
+    UNUSED(arg3);
+    UNUSED(arg4);
+    UNUSED(arg5);
     return -1;
 }
