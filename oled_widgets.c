@@ -1,6 +1,10 @@
 #define _GNU_SOURCE
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
+
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "oled.h"
 #include "oled_pictures.h"
@@ -139,13 +143,14 @@ char *main_lines[] = {
     "Radio mode",
     "Fix TTL",
     "Disable battery",
+    "Add SSH key",
     "ADB daemon",
     "Matrix",
     "Photo",
     "Snake",
 };
 
-char main_lines_num = 9;
+char main_lines_num = 10;
 
 void main_init() {
     main_current_item = 0;
@@ -196,6 +201,9 @@ void main_power_key_pressed() {
         case 8:
             enter_widget(8);
             break;
+        case 9:
+            enter_widget(9);
+            break;
     }
 }
 
@@ -239,6 +247,8 @@ void mobile_process_callback(int good, char *buf) {
 
         if (sscanf(&buf[offset], "<rssi>&gt;=%ddBm</rssi>", &val) == 1) {
             mobile_rssi = val;
+        } else if (sscanf(&buf[offset], "<rssi>&lt;=%ddBm</rssi>", &val) == 1) {
+            mobile_rssi = val;
         } else if (sscanf(&buf[offset], "<rssi>%ddBm</rssi>", &val) == 1) {
             mobile_rssi = val;
         } else if (sscanf(&buf[offset], "<rsrq>%ddB</rsrq>", &val) == 1) {
@@ -277,7 +287,7 @@ void mobile_process_callback(int good, char *buf) {
 }
 
 void update_measurements() {
-    create_process("/online/web_hook_client device signal 1 1", mobile_process_callback);
+    create_process("/app/oled_hijack/web_hook_client device signal 1 1", mobile_process_callback);
 }
 
 void mobile_signal_init() {
@@ -578,7 +588,7 @@ void execute_menu_item(uint8_t curr_item, char items[][MAXITEMLEN], char *script
 }
 // ---------------------------------- NO BATTERY MODE --------------------------
 
-char* no_battery_mode_script = "/online/no_battery_mode.sh";
+char* no_battery_mode_script = "/app/oled_hijack/no_battery_mode.sh";
 uint8_t no_battery_mode_menu_cur_item = 0;
 char no_battery_mode_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -607,7 +617,7 @@ void no_battery_mode_power_key_pressed() {
 
 // -------------------------------------- RADIO MODE -------------------------
 
-char* radio_mode_script = "/online/radio_mode.sh";
+char* radio_mode_script = "/app/oled_hijack/radio_mode.sh";
 uint8_t radio_mode_menu_cur_item = 0;
 char radio_mode_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -635,7 +645,7 @@ void radio_mode_power_key_pressed() {
 
 // --------------------------------------- FIX TTL - -------------------------
 
-char* fix_ttl_script = "/online/fix_ttl.sh";
+char* fix_ttl_script = "/app/oled_hijack/fix_ttl.sh";
 uint8_t fix_ttl_menu_cur_item = 0;
 char fix_ttl_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -659,6 +669,117 @@ void fix_ttl_menu_key_pressed() {
 void fix_ttl_power_key_pressed() {
     execute_menu_item(fix_ttl_menu_cur_item, fix_ttl_menu_items,
                       fix_ttl_script, fix_ttl_process_callback);
+}
+
+// --------------------------------------- Add SSH Key -------------------------
+
+uint8_t add_ssh_is_success = 0;
+uint8_t add_ssh_is_paused = 0;
+uint8_t add_ssh_is_failed = 0;
+uint32_t add_ssh_tick_num = 0;
+
+const int MAX_PIN_LEN = 32;
+char add_ssh_pin[MAX_PIN_LEN] = {};
+uint32_t add_ssh_timer = 0;
+
+const char* SSH_PIN_FILE_NAME = "/var/sshpin";
+const int SSH_TICKS_LIMIT = 300;  // 5 mins
+
+void add_ssh_tick() {
+    if (add_ssh_is_paused) {
+        return;
+    }
+    add_ssh_tick_num += 1;
+    if( access( SSH_PIN_FILE_NAME, F_OK ) == -1 ) {
+        add_ssh_is_success = 1;
+    } else if (add_ssh_tick_num > SSH_TICKS_LIMIT) {
+        add_ssh_is_paused = 1;
+        unlink(SSH_PIN_FILE_NAME);
+    }
+
+    repaint();
+}
+
+void add_ssh_write_pin() {
+    mode_t prev_umask = umask(0077);
+    FILE *f = fopen(SSH_PIN_FILE_NAME, "w");
+    umask(prev_umask);
+    if (!f) {
+        add_ssh_is_failed = 1;
+        return;
+    }
+
+    fprintf(f, "%s\n", add_ssh_pin);
+    fclose(f);
+}
+
+void add_ssh_init() {
+    add_ssh_is_success = 0;
+    add_ssh_is_paused = 0;
+    add_ssh_is_failed = 0;
+
+    int fd = open("/dev/urandom", O_RDONLY);
+    if (fd == -1) {
+        add_ssh_is_failed = 1;
+    } else {
+        uint32_t buf;
+        if (read(fd, (void*) &buf, sizeof(uint32_t)) != sizeof(uint32_t)) {
+            add_ssh_is_failed = 1;
+        } else {
+            snprintf(add_ssh_pin, MAX_PIN_LEN, "pin%06d", buf % 1000000);
+            add_ssh_write_pin();
+        }
+    }
+
+    add_ssh_timer = timer_create_ex(1000, 1, add_ssh_tick, 0);
+}
+
+void add_ssh_deinit() {
+    if(add_ssh_timer) {
+        timer_delete_ex(add_ssh_timer);
+        add_ssh_timer = 0;
+    }
+    unlink(SSH_PIN_FILE_NAME);
+}
+
+void add_ssh_paint() {
+    if (!add_ssh_is_success && !add_ssh_is_paused) {
+        put_small_text(7, 10, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Connect to me with");
+        put_small_text(7, 25, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "your SSH key as user:");
+        put_large_text(20, 45, LCD_WIDTH, LCD_HEIGHT, 0, 255, 0, add_ssh_pin);
+        put_small_text(5, 70, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Your key will be added");
+        if (add_ssh_tick_num % 4 == 0) {
+            put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 255, "Status: waiting...");
+        } else if (add_ssh_tick_num % 4 == 1) {
+            put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 255, "Status: waiting");
+        } else if (add_ssh_tick_num % 4 == 2) {
+            put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 255, "Status: waiting.");
+        } else if (add_ssh_tick_num % 4 == 3) {
+            put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 255, "Status: waiting..");
+        }
+    } else if (add_ssh_is_paused) {
+        put_small_text(3, 10, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "No connection detected");
+        put_small_text(7, 25, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press Power to retry");
+        put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 255, 0, 255, "Status: paused");
+    } else if (add_ssh_is_failed) {
+        put_small_text(7, 25, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press Power to retry");
+        put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 255, 0, 0, "Status: error");
+    } else if (add_ssh_is_success) {
+        put_small_text(25, 30, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press any key");
+        put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 0, "Status: success");
+    }
+}
+
+void add_ssh_power_key_pressed() {
+    if (add_ssh_is_paused || add_ssh_is_failed) {
+        add_ssh_is_paused = 0;
+        add_ssh_is_failed = 0;
+        add_ssh_tick_num = 0;
+
+        add_ssh_write_pin();
+        return;
+    }
+    leave_widget();
 }
 
 // --------------------------------------- ADBD -- -------------------------
@@ -697,7 +818,6 @@ void adbd_power_key_pressed() {
         repaint();
     }
 }
-
 
 // -------------------------------------- MATRIX -----------------------------
 
@@ -979,6 +1099,16 @@ struct led_widget widgets[] = {
         .parent_idx = 0
     },
     {
+        .name = "add ssh",
+        .lcd_sleep_ms = 120000,
+        .init = add_ssh_init,
+        .deinit = add_ssh_deinit,
+        .paint = add_ssh_paint,
+        .menu_key_handler = leave_widget,
+        .power_key_handler = add_ssh_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
         .name = "adbd",
         .lcd_sleep_ms = 60000,
         .init = adbd_init,
@@ -1020,4 +1150,4 @@ struct led_widget widgets[] = {
     },    
 };
 
-const uint32_t WIDGETS_SIZE = 9;
+const uint32_t WIDGETS_SIZE = 10;
