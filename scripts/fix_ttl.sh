@@ -6,17 +6,17 @@ if [ "$#" -eq 0 ]; then
     TTL="$(cat /etc/fix_ttl)"
 
     if [ "$TTL" -eq 0 ]; then
-        echo "item: <No>:0"
-        echo "item:  Yes:64"
+        echo "item: <No>:TTL_NO_FIX"
+        echo "item:  Yes:TTL_FIX64"
     else
-        echo "item:  No:0"
-        echo "item: <Yes>:64"
+        echo "item:  No:TTL_NO_FIX"
+        echo "item: <Yes>:TTL_FIX64"
     fi
 fi
 
 if [ "$#" -eq 1 ]; then
     case "$1" in
-        0 )
+        TTL_NO_FIX )
             mount -o remount,rw /system
             echo 0 > /etc/fix_ttl
             echo 0 > /etc/disable_spe
@@ -30,7 +30,7 @@ if [ "$#" -eq 1 ]; then
                 echo "text:Success"
             fi
             ;;
-        64 )
+        TTL_FIX64 )
             mount -o remount,rw /system
             echo 64 > /etc/fix_ttl
             echo 1 > /etc/disable_spe
