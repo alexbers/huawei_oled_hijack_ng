@@ -174,7 +174,7 @@ void main_paint() {
 
 void main_power_key_pressed() {
     switch(main_current_item) {
-        case 0: 
+        case 0:
             notify_handler_async(SUBSYSTEM_GPIO, BUTTON_LONGMENU, 0);
             break;
         case 1:
@@ -228,6 +228,7 @@ int32_t mobile_rscp = 0;
 int32_t mobile_ecio = 0;
 int32_t mobile_ul_bw = 0;
 int32_t mobile_dl_bw = 0;
+int32_t mobile_band = 0;
 
 const int32_t MAX_LAST_RSSI = 128;
 int32_t last_rssi[MAX_LAST_RSSI] = {};
@@ -265,6 +266,8 @@ void mobile_process_callback(int good, char *buf) {
             mobile_ul_bw = val;
         } else if (sscanf(&buf[offset], "<dlbandwidth>%dMHz</dlbandwidth>", &val) == 1) {
             mobile_dl_bw = val;
+        } else if (sscanf(&buf[offset], "<band>%d</band>", &val) == 1) {
+            mobile_band = val;
         }
 
         while(buf[offset] != 0 && buf[offset] != '\n') {
@@ -292,7 +295,7 @@ void update_measurements() {
 
 void mobile_signal_init() {
     mobile_rssi = mobile_rsrq = mobile_rsrp = mobile_sinr = mobile_rscp = mobile_ecio = 0;
-    mobile_ul_bw = mobile_dl_bw = 0;
+    mobile_ul_bw = mobile_dl_bw = mobile_band = 0;
 
     mobile_graph_mode = 1;
 
@@ -372,14 +375,17 @@ void mobile_signal_text_paint() {
         mobile_print_val_colorized(53, 64, 12, 10, 7, mobile_sinr, "dB");
     }
 
-    if (mobile_ul_bw != 0) {
-        put_small_text(8, 88, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "UL BW");
-        mobile_print_val_colorized(53, 84, 12, 10, 7, mobile_ul_bw, "Mhz");
+    if (mobile_ul_bw != 0 && mobile_dl_bw != 0) {
+        put_small_text(8, 88, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "BW");
+        mobile_print_val_colorized(53, 84, 12, 10, 7, (mobile_ul_bw+mobile_dl_bw) / 2, "Mhz");
     }
 
-    if (mobile_dl_bw != 0) {
-        put_small_text(8, 108, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "DL BW");
-        mobile_print_val_colorized(53, 104, 12, 10, 7, mobile_dl_bw, "Mhz");
+    if (mobile_band) {
+        char buf[256];
+        snprintf(buf, 256, "B%d", mobile_band);
+
+        put_small_text(8, 108, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Band");
+        put_large_text(53, 104, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, buf);
     }
 }
 
@@ -965,7 +971,7 @@ void snake_tick() {
         }
     }
 
-    if (next_head.x < 0 || next_head.x >= SNAKE_FIELD_WIDTH || 
+    if (next_head.x < 0 || next_head.x >= SNAKE_FIELD_WIDTH ||
         next_head.y < 0 || next_head.y >= SNAKE_FIELD_HEIGHT) {
         snake_dead = 1;
     }
@@ -1024,7 +1030,7 @@ void snake_paint() {
 
     put_small_text(5, 1, LCD_WIDTH, SNAKE_SCORE_SPACE, 255, 255, 255, buf);
     put_rect(0, SNAKE_SCORE_SPACE - 1, LCD_WIDTH, 1, 255, 255, 255);
-    
+
     for (uint32_t i = 0; i < snake_len; i += 1) {
         put_rect(snake[i].x * SNAKE_SQUARE_SIZE, SNAKE_SCORE_SPACE + snake[i].y * SNAKE_SQUARE_SIZE,
                  SNAKE_SQUARE_SIZE, SNAKE_SQUARE_SIZE, 255, 255, 255);
@@ -1067,7 +1073,7 @@ struct led_widget widgets[] = {
         .menu_key_handler = mobile_switch_mode,
         .power_key_handler = leave_widget,
         .parent_idx = 0
-    },    
+    },
     {
         .name = "radio mode",
         .lcd_sleep_ms = 15000,
@@ -1127,7 +1133,7 @@ struct led_widget widgets[] = {
         .menu_key_handler = leave_widget,
         .power_key_handler = leave_widget,
         .parent_idx = 0
-    },    
+    },
     {
         .name = "photo",
         .lcd_sleep_ms = 15000,
@@ -1137,7 +1143,7 @@ struct led_widget widgets[] = {
         .menu_key_handler = photo_next,
         .power_key_handler = leave_widget,
         .parent_idx = 0
-    },    
+    },
     {
         .name = "snake",
         .lcd_sleep_ms = 20000,
@@ -1147,7 +1153,7 @@ struct led_widget widgets[] = {
         .menu_key_handler = snake_turn_left,
         .power_key_handler = snake_turn_right,
         .parent_idx = 0
-    },    
+    },
 };
 
 const uint32_t WIDGETS_SIZE = 10;
