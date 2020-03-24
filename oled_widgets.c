@@ -911,6 +911,7 @@ void photo_paint() {
 
 // 0 - right, 1 - up, 2 - left, 3 - down
 uint8_t snake_direction = 0;
+uint8_t snake_tick_begin_direction = 0;
 int snake_score = 0;
 
 uint32_t snake_len = 0;
@@ -950,6 +951,8 @@ void snake_place_goal() {
 
 void snake_tick() {
     struct snake_point next_head;
+
+    snake_tick_begin_direction = snake_direction;
 
     if(snake_direction == 0) {
         next_head.x = snake[0].x + 1;
@@ -1003,6 +1006,7 @@ void snake_tick() {
 void snake_init() {
     snake_dead = 0;
     snake_direction = 0;
+    snake_tick_begin_direction = 0;
     snake_score = 0;
     snake_len = 3;
     snake[0].x = 5; snake[0].y = 8;
@@ -1043,14 +1047,20 @@ void snake_turn_left() {
     if (snake_dead) {
         leave_widget();
     }
-    snake_direction = (snake_direction + 1) % 4;
+    uint8_t snake_next_direction = (snake_direction + 4 + 1) % 4;
+    if((snake_next_direction + 2) % 4 != snake_tick_begin_direction) {
+        snake_direction = snake_next_direction;
+    }
 }
 
 void snake_turn_right() {
     if (snake_dead) {
         leave_widget();
     }
-    snake_direction = (snake_direction + 4 - 1) % 4;
+    uint8_t snake_next_direction = (snake_direction + 4 - 1) % 4;
+    if((snake_next_direction + 2) % 4 != snake_tick_begin_direction) {
+        snake_direction = snake_next_direction;
+    }
 }
 
 struct led_widget widgets[] = {
