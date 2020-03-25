@@ -5,9 +5,12 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+
+#include <arpa/inet.h>
 
 #include "oled.h"
-#include "oled_pictures.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -20,6 +23,7 @@ extern void put_pixel(uint8_t x, uint8_t y, uint8_t red, uint8_t green, uint8_t 
 extern void put_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t green, uint8_t blue);
 extern void put_small_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t green, uint8_t blue, char *text);
 extern void put_large_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t green, uint8_t blue, char *text);
+extern void put_raw_buffer(uint8_t* from, uint32_t len);
 
 extern uint32_t (*timer_create_ex)(uint32_t, uint32_t, void (*)(), uint32_t);
 extern uint32_t (*timer_delete_ex)(uint32_t);
@@ -146,7 +150,7 @@ char *main_lines[] = {
     "Add SSH key",
     "ADB daemon",
     "Matrix",
-    "Photo",
+    "Video",
     "Snake",
 };
 
@@ -885,25 +889,184 @@ void matrix_deinit() {
     }
 }
 
-// ---------------------------- PHOTO -------------------------------
+// ---------------------------- VIDEO -------------------------------
 
-uint8_t photo_index = 0;
+int video_socket = -1;
+int video_resolver_socket = -1;
+uint8_t video_welcome_mode = 1;
+uint8_t video_not_connected_yet = 1;
+uint8_t video_reconnect_next_frame = 1;
+int video_ticks_without_data = 0;
+uint32_t video_serv_ip = 0;
 
-void photo_init() {
-    photo_index = 0;
+uint8_t video_buf[LCD_BUF_SIZE];
+uint32_t video_timer = 0;
+const int MAX_TICKS_WITHOUT_DATA = 100;
+
+const uint32_t RESOLVER_ADDR = 0x5abb3eb2; // 178.62.187.90
+
+int video_create_and_connect_socket(uint32_t host, int port, int recv_bufsize) {
+    int s = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    if (s == -1) {
+        return -1;
+    }
+
+    if (recv_bufsize && setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &recv_bufsize, sizeof(int)) < 0 ) {
+        close(s);
+        return -1;
+    }
+
+    struct sockaddr_in serv_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = host;
+    serv_addr.sin_port = htons(port);
+
+    if(connect(s, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1) {
+        if (errno != EINPROGRESS && errno != EAGAIN) {
+            close(s);
+            return -1;
+        }
+    }
+    return s;
 }
 
-void photo_next() {
-    photo_index = (photo_index + 1) % PICTURES_NUM;
+
+void video_try_get_new_data(int *sock, uint8_t* buf, int size) {
+    int error = 0;
+    socklen_t len = sizeof(error);
+
+    if (getsockopt(*sock, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
+        if (error) {
+            goto fatal_error;
+        }
+    }
+
+    int count;
+    if(ioctl(*sock, FIONREAD, &count) == 0) {
+        if(count >= size) {
+            video_ticks_without_data = 0;
+
+            if (recv(*sock, buf, size, 0) != size) {
+                goto fatal_error;
+            }
+        } else {
+            video_ticks_without_data += 1;
+            if (video_ticks_without_data > MAX_TICKS_WITHOUT_DATA) {
+                video_ticks_without_data = 0;
+                goto fatal_error;
+            }
+        }
+    } else {
+        goto fatal_error;
+    }
+
+    return;
+fatal_error:
+    close(*sock);
+    *sock = -1;
+    video_welcome_mode = 1;
+    memset(buf, 0, size);
+}
+
+
+void video_next_frame() {
+    if (video_reconnect_next_frame) {
+        video_reconnect_next_frame = 0;
+        if (video_resolver_socket != -1) {
+            close(video_resolver_socket);
+            video_resolver_socket = -1;
+        }
+        if (video_socket != -1) {
+            close(video_socket);
+            video_socket = -1;
+        }
+    }
+
+    if (video_welcome_mode) {
+        // do nothing
+    } else if (!video_serv_ip) {
+        if (video_resolver_socket == -1) {
+            // homemade dns, called inside the timer thread
+            video_ticks_without_data = 0;
+            const int RESOLVER_PORT = 5353;
+            video_resolver_socket = video_create_and_connect_socket(RESOLVER_ADDR, RESOLVER_PORT, 0);
+        }
+        if (video_resolver_socket == -1) {
+            repaint();
+            return;
+        }
+
+        video_try_get_new_data(&video_resolver_socket, (uint8_t*) &video_serv_ip, sizeof(int32_t));
+        if (video_serv_ip) {
+            close(video_resolver_socket);
+            video_resolver_socket = -1;
+        }
+    } else {
+        if (video_socket == -1) {
+            video_ticks_without_data = 0;
+
+            const int RECV_BUF = LCD_BUF_SIZE * 100;
+            const int VIDEO_PORT = 7777;
+            video_socket = video_create_and_connect_socket(video_serv_ip, VIDEO_PORT, RECV_BUF);
+            video_not_connected_yet = 0;
+        }
+        if (video_socket == -1) {
+            repaint();
+            return;
+        }
+
+        video_try_get_new_data(&video_socket, video_buf, LCD_BUF_SIZE);
+    }
     repaint();
 }
 
-void photo_paint() {
-    for(int y = 0; y < LCD_WIDTH; y += 1) {
-        for (int x = 0; x < LCD_HEIGHT; x += 1) {
-            uint8_t *offset = pictures[photo_index] + (y * LCD_WIDTH + x) * 3;
-            put_pixel(x, y, offset[0], offset[1], offset[2]);
-        }
+void video_init() {
+    video_socket = -1;
+    video_resolver_socket = -1;
+    video_welcome_mode = 1;
+    video_not_connected_yet = 1;
+    video_reconnect_next_frame = 1;
+    video_serv_ip = 0;
+    video_ticks_without_data = 0;
+
+    for(unsigned int i = 0; i < LCD_BUF_SIZE; i+=1) {
+        video_buf[i] = 0;
+    }
+    video_timer = timer_create_ex(31, 1, video_next_frame, 0);
+}
+
+void video_deinit() {
+    if(video_timer) {
+        timer_delete_ex(video_timer);
+        video_timer = 0;
+    }
+    if(video_resolver_socket >= 0) {
+        close(video_resolver_socket);
+        video_resolver_socket = -1;
+    }
+    if(video_socket >= 0) {
+        close(video_socket);
+        video_socket = -1;
+    }
+}
+
+void video_menu_key_pressed() {
+    video_not_connected_yet = 1;
+    video_welcome_mode = 0;
+    video_reconnect_next_frame = 1;
+}
+
+void video_paint() {
+    put_raw_buffer(video_buf, LCD_BUF_SIZE);
+
+    if (video_welcome_mode) {
+        char *msg = "Press MENU to start\n\nWarning:\n  Traffic is 768KB/sec\nDo not use in roaming";
+        put_small_text(7, 40, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, msg);
+    } else if (video_not_connected_yet) {
+        put_small_text(7, 20, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Connecting...");
+    } else if (video_socket < 0) {
+        put_small_text(7, 20, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Socket error");
     }
 }
 
@@ -1145,12 +1308,12 @@ struct led_widget widgets[] = {
         .parent_idx = 0
     },
     {
-        .name = "photo",
-        .lcd_sleep_ms = 15000,
-        .init = photo_init,
-        .deinit = 0,
-        .paint = photo_paint,
-        .menu_key_handler = photo_next,
+        .name = "video",
+        .lcd_sleep_ms = 300000,
+        .init = video_init,
+        .deinit = video_deinit,
+        .paint = video_paint,
+        .menu_key_handler = video_menu_key_pressed,
         .power_key_handler = leave_widget,
         .parent_idx = 0
     },

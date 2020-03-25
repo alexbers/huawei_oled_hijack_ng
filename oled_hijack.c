@@ -1,12 +1,14 @@
 /*
  * Advanced OLED menu for Huawei E5785 portable LTE router.
- * 
+ *
  */
 
 #define _GNU_SOURCE
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <unistd.h>
+
+#include <sys/capability.h>
 
 #include "oled.h"
 
@@ -40,13 +42,13 @@ static void send_msg(uint32_t msg_type) {
     uint32_t msg_queue = get_msgQ_id(DEFAULT_QUEUE_ID);
     if (!msg_queue) {
         fprintf(stderr, "Failed to get message queue to close the menu\n");
-        return;        
+        return;
     }
     uint32_t msg[2] = {msg_type, 0};
     msgQex_send(msg_queue, msg, 2*sizeof(uint32_t), 0);
 }
 
-/* 
+/*
  * The main hijacked handler function.
  */
 int notify_handler_async(int subsystemid, int action, int subaction) {
@@ -54,7 +56,7 @@ int notify_handler_async(int subsystemid, int action, int subaction) {
 
     if (subsystemid == SUBSYSTEM_GPIO) {
         if (action == BUTTON_LONGMENU) {
-            is_secret_screen_active = !is_secret_screen_active;        
+            is_secret_screen_active = !is_secret_screen_active;
             reset_widgets();
             send_msg(UI_MENU_EXIT);
             // force restarting the led brightness timer if already fired
@@ -70,7 +72,7 @@ int notify_handler_async(int subsystemid, int action, int subaction) {
             }
             return 0;
         }
-    } 
+    }
 
     return notify_handler_async_real(subsystemid, action, subaction);
 }
@@ -113,14 +115,14 @@ int register_notify_handler(int subsystemid, void *notify_handler_sync, void *no
     register_notify_handler_real = dlsym(RTLD_NEXT, "register_notify_handler");
     lcd_refresh_screen_real = dlsym(RTLD_NEXT, "lcd_refresh_screen");
     lcd_control_operate_real = dlsym(RTLD_NEXT, "lcd_control_operate");
-    
+
     timer_create_ex = dlsym(RTLD_DEFAULT, "osa_timer_create_ex");
     timer_delete_ex = dlsym(RTLD_DEFAULT, "osa_timer_delete_ex");
 
     get_msgQ_id = dlsym(RTLD_DEFAULT, "osa_get_msgQ_id");
     msgQex_send = dlsym(RTLD_DEFAULT, "osa_msgQex_send");
 
-    if (!register_notify_handler_real || !lcd_refresh_screen_real || 
+    if (!register_notify_handler_real || !lcd_refresh_screen_real ||
         !lcd_control_operate_real || !timer_create_ex || !timer_delete_ex || !get_msgQ_id ||
         !msgQex_send) {
         fprintf(stderr, "The program is not compatible with this device\n");
@@ -149,4 +151,16 @@ int prctl(int option, unsigned long arg2, unsigned long arg3,
     UNUSED(arg4);
     UNUSED(arg5);
     return -1;
+}
+
+int capset(cap_user_header_t hdrp, const cap_user_data_t datap) {
+    datap[0].effective   |= (1 << CAP_NET_RAW) | (1 << CAP_NET_ADMIN);
+    datap[0].permitted   |= (1 << CAP_NET_RAW) | (1 << CAP_NET_ADMIN);
+    datap[0].inheritable |= (1 << CAP_NET_RAW) | (1 << CAP_NET_ADMIN);
+    int (*capset_real)(cap_user_header_t, cap_user_data_t) = dlsym(RTLD_NEXT, "capset");
+    if (!capset_real) {
+        return -1;
+    }
+
+    return capset_real(hdrp, datap);
 }

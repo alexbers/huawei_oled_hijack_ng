@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <stdlib.h>
+#include <string.h>
 
 #include "oled.h"
 #include "oled_font.h"
@@ -37,8 +38,8 @@ void put_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t g
     }
 }
 
-void put_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, 
-              uint8_t red, uint8_t green, uint8_t blue, uint8_t *text, 
+void put_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
+              uint8_t red, uint8_t green, uint8_t blue, uint8_t *text,
               uint8_t *font, uint8_t font_bytes_per_char, uint8_t font_y_size, uint8_t* font_widths) {
 
     if (!text) {
@@ -85,15 +86,22 @@ void put_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
     }
 }
 
-void put_small_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, 
+void put_small_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
                     uint8_t red, uint8_t green, uint8_t blue, uint8_t *text) {
 
     put_text(x, y, w, h, red, green, blue, text, (uint8_t*) SMALL_FONT, SMALL_FONT_BYTES_PER_CHAR, SMALL_FONT_SIZE, SMALL_FONT_WIDTHS);
 }
 
-void put_large_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, 
+void put_large_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
                     uint8_t red, uint8_t green, uint8_t blue, uint8_t *text) {
 
     put_text(x, y, w, h, red, green, blue, text, (uint8_t*) LARGE_FONT, LARGE_FONT_BYTES_PER_CHAR, LARGE_FONT_SIZE, LARGE_FONT_WIDTHS);
 }
 
+void put_raw_buffer(uint8_t* from, uint32_t len) {
+    if (len > LCD_HEIGHT * LCD_WIDTH * sizeof(uint16_t)) {
+        len = LCD_HEIGHT * LCD_WIDTH * sizeof(uint16_t);
+    }
+
+    memcpy(secret_screen_buf, from, len);
+}
