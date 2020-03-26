@@ -143,7 +143,7 @@ void dispatch_menu_key() {
 uint8_t main_current_item;
 
 char *main_lines[] = {
-    "<Back>",
+    "<- Back",
     "Signal info",
     "Radio mode",
     "TTL & IMEI",
@@ -168,15 +168,21 @@ void main_paint() {
 
     for (int i = 0; i < lines_per_page && page_first_item + i < main_lines_num; i += 1) {
         char* cur_line = main_lines[page_first_item + i];
+        uint8_t y = 5 + i * 15;
+
+        if (page_first_item + i != 0) {
+            y += 3;
+        }
 
         if (page_first_item + i == main_current_item) {
-            put_small_text(5, 10 + i * 15, LCD_WIDTH, LCD_HEIGHT, 255,0,255, "#");
+            put_small_text(4, y, LCD_WIDTH, LCD_HEIGHT, 255,0,255, "#");
         }
-        put_small_text(20, 10 + i * 15, LCD_WIDTH, LCD_HEIGHT, 255,255,255, cur_line);
+
+        put_small_text(20, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, cur_line);
     }
 
     if (page_first_item + lines_per_page < main_lines_num) {
-        put_small_text(20, 115, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
+        put_small_text(20, 112, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
     }
 
 }
@@ -468,7 +474,7 @@ const int MAXITEMLEN = 128;
 
 void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
     char *saveptr;
-    strcpy(items[0], "item:<Back>:");
+    strcpy(items[0], "item:<- Back");
     int item = 1;
 
     char *line = strtok_r(buf, "\n", &saveptr);
@@ -496,7 +502,7 @@ void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
 
 void init_menu(uint8_t* curr_item, char items[][MAXITEMLEN]) {
     *curr_item = 0;
-    strcpy(items[0], "item:<Back>:");
+    strcpy(items[0], "item:<- Back:");
     for (int i = 1; i < MAXMENUITEMS; i += 1) {
         items[i][0] = 0;
     }
@@ -527,7 +533,7 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
         char cur_line[MAXITEMLEN];
         strncpy(cur_line, items[page_first_item + i], MAXITEMLEN);
 
-        int8_t y = 10 + i * 15;
+        int8_t y = 5 + i * 15;
         if (page_first_item == 0 && i > 0) {
             y += 3;
         }
@@ -557,13 +563,13 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
     }
 
     if (i == lines_per_page && (i+page_first_item) < MAXITEMLEN && items[page_first_item + i][0]) {
-        put_small_text(20, 116, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
+        put_small_text(20, 112, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
     }
 }
 
 void menu_process_callback(int isgood, char* buf, uint8_t* curr_item, char items[][MAXITEMLEN]) {
     if(!isgood) {
-        strcpy(items[0], "item:<Back>:");
+        strcpy(items[0], "item:<- Back:");
         strcpy(items[1], "text:call error");
         for(int i = 2; i < MAXMENUITEMS; i += 1) {
             items[i][0] = 0;
