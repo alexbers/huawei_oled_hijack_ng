@@ -471,6 +471,7 @@ void mobile_switch_mode() {
 // ---------------------------- COMMON EXTERNAL MENU FUNCTIONS -------------------------
 const uint8_t MAXMENUITEMS = 32;
 const int MAXITEMLEN = 128;
+const int LINES_PER_PAGE = 7;
 
 void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
     char *saveptr;
@@ -485,7 +486,16 @@ void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
             break;
         }
 
-        if (strncmp(line, "item:", 5) == 0 || strncmp(line, "text:", 5) == 0) {
+        if (strncmp(line, "pagebreak:", 10) == 0) {
+            int items_to_insert = LINES_PER_PAGE - (item % LINES_PER_PAGE);
+            for (int i = 0; i < items_to_insert; i += 1) {
+                strncpy(items[item], "text:", MAXITEMLEN);
+                item += 1;
+                if(item >= MAXMENUITEMS - 1) {
+                    break;
+                }
+            }
+        } else if (strncmp(line, "item:", 5) == 0 || strncmp(line, "text:", 5) == 0) {
             strncpy(items[item], line, MAXITEMLEN);
             item += 1;
             if(item >= MAXMENUITEMS-1) {
@@ -521,13 +531,11 @@ void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
 }
 
 void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
-    const int lines_per_page = 7;
-
-    const int page_first_item = curr_item / lines_per_page * lines_per_page;
+    const int page_first_item = curr_item / LINES_PER_PAGE * LINES_PER_PAGE;
 
     int i;
     for (i = 0;
-         i < lines_per_page && (page_first_item + i) < MAXITEMLEN && items[page_first_item + i][0];
+         i < LINES_PER_PAGE && (page_first_item + i) < MAXITEMLEN && items[page_first_item + i][0];
          i += 1)
     {
         char cur_line[MAXITEMLEN];
@@ -562,7 +570,7 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
         put_small_text(20, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, item_text);
     }
 
-    if (i == lines_per_page && (i+page_first_item) < MAXITEMLEN && items[page_first_item + i][0]) {
+    if (i == LINES_PER_PAGE && (i+page_first_item) < MAXITEMLEN && items[page_first_item + i][0]) {
         put_small_text(20, 112, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
     }
 }
@@ -672,32 +680,32 @@ void radio_mode_power_key_pressed() {
                       radio_mode_script, radio_mode_process_callback);
 }
 
-// --------------------------------------- FIX TTL - -------------------------
+// ------------------------------------- TTL and IMEI --------------------------
 
-char* fix_ttl_script = "/app/oled_hijack/fix_ttl.sh";
-uint8_t fix_ttl_menu_cur_item = 0;
-char fix_ttl_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
+char* ttl_and_imei_script = "/app/oled_hijack/ttl_and_imei.sh";
+uint8_t ttl_and_imei_menu_cur_item = 0;
+char ttl_and_imei_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
-void fix_ttl_process_callback(int isgood, char* buf) {
-    menu_process_callback(isgood, buf, &fix_ttl_menu_cur_item, fix_ttl_menu_items);
+void ttl_and_imei_process_callback(int isgood, char* buf) {
+    menu_process_callback(isgood, buf, &ttl_and_imei_menu_cur_item, ttl_and_imei_menu_items);
 }
 
-void fix_ttl_init() {
-    init_menu(&fix_ttl_menu_cur_item, fix_ttl_menu_items);
-    create_process(fix_ttl_script, fix_ttl_process_callback);
+void ttl_and_imei_init() {
+    init_menu(&ttl_and_imei_menu_cur_item, ttl_and_imei_menu_items);
+    create_process(ttl_and_imei_script, ttl_and_imei_process_callback);
 }
 
-void fix_ttl_paint() {
-    paint_menu(fix_ttl_menu_cur_item, fix_ttl_menu_items);
+void ttl_and_imei_paint() {
+    paint_menu(ttl_and_imei_menu_cur_item, ttl_and_imei_menu_items);
 }
 
-void fix_ttl_menu_key_pressed() {
-    next_menu_item(&fix_ttl_menu_cur_item, fix_ttl_menu_items);
+void ttl_and_imei_menu_key_pressed() {
+    next_menu_item(&ttl_and_imei_menu_cur_item, ttl_and_imei_menu_items);
 }
 
-void fix_ttl_power_key_pressed() {
-    execute_menu_item(fix_ttl_menu_cur_item, fix_ttl_menu_items,
-                      fix_ttl_script, fix_ttl_process_callback);
+void ttl_and_imei_power_key_pressed() {
+    execute_menu_item(ttl_and_imei_menu_cur_item, ttl_and_imei_menu_items,
+                      ttl_and_imei_script, ttl_and_imei_process_callback);
 }
 
 // --------------------------------------- Add SSH Key -------------------------
@@ -1291,13 +1299,13 @@ struct led_widget widgets[] = {
         .parent_idx = 0
     },
     {
-        .name = "fix ttl",
+        .name = "ttl and imei",
         .lcd_sleep_ms = 15000,
-        .init = fix_ttl_init,
+        .init = ttl_and_imei_init,
         .deinit = 0,
-        .paint = fix_ttl_paint,
-        .menu_key_handler = fix_ttl_menu_key_pressed,
-        .power_key_handler = fix_ttl_power_key_pressed,
+        .paint = ttl_and_imei_paint,
+        .menu_key_handler = ttl_and_imei_menu_key_pressed,
+        .power_key_handler = ttl_and_imei_power_key_pressed,
         .parent_idx = 0
     },
     {
