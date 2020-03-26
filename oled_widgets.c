@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 
 #include "oled.h"
+#include "oled_font.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -172,6 +173,10 @@ void main_paint() {
             put_small_text(5, 10 + i * 15, LCD_WIDTH, LCD_HEIGHT, 255,0,255, "#");
         }
         put_small_text(20, 10 + i * 15, LCD_WIDTH, LCD_HEIGHT, 255,255,255, cur_line);
+    }
+
+    if (page_first_item + lines_per_page < main_lines_num) {
+        put_small_text(20, 115, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
     }
 
 }
@@ -510,11 +515,12 @@ void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
 }
 
 void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
-    const int lines_per_page = 7;
+    const int lines_per_page = 6;
 
     const int page_first_item = curr_item / lines_per_page * lines_per_page;
 
-    for (int i = 0; i < lines_per_page && items[page_first_item + i][0]; i += 1) {
+    int i;
+    for (i = 0; i < lines_per_page && i < MAXITEMLEN && items[page_first_item + i][0]; i += 1) {
         char cur_line[MAXITEMLEN];
         strncpy(cur_line, items[page_first_item + i], MAXITEMLEN);
 
@@ -545,6 +551,10 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
         }
 
         put_small_text(20, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, item_text);
+    }
+
+    if (i == lines_per_page && i < MAXITEMLEN && items[i][0]) {
+        put_small_text(20, 115, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
     }
 }
 
@@ -911,7 +921,7 @@ int video_create_and_connect_socket(uint32_t host, int port, int recv_bufsize) {
         return -1;
     }
 
-    if (recv_bufsize && setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &recv_bufsize, sizeof(int)) < 0 ) {
+    if (recv_bufsize && setsockopt(s, SOL_SOCKET, SO_RCVBUFFORCE, &recv_bufsize, sizeof(recv_bufsize)) < 0 ) {
         close(s);
         return -1;
     }
@@ -1074,7 +1084,8 @@ void video_paint() {
 
 // 0 - right, 1 - up, 2 - left, 3 - down
 uint8_t snake_direction = 0;
-uint8_t snake_tick_begin_direction = 0;
+void (*snake_next_sched_action)() = 0;
+void (*snake_nextnext_sched_action)() = 0;
 int snake_score = 0;
 
 uint32_t snake_len = 0;
@@ -1115,7 +1126,11 @@ void snake_place_goal() {
 void snake_tick() {
     struct snake_point next_head;
 
-    snake_tick_begin_direction = snake_direction;
+    if (snake_next_sched_action) {
+        snake_next_sched_action();
+        snake_next_sched_action = snake_nextnext_sched_action;
+        snake_nextnext_sched_action = 0;
+    }
 
     if(snake_direction == 0) {
         next_head.x = snake[0].x + 1;
@@ -1169,7 +1184,8 @@ void snake_tick() {
 void snake_init() {
     snake_dead = 0;
     snake_direction = 0;
-    snake_tick_begin_direction = 0;
+    snake_next_sched_action = 0;
+    snake_nextnext_sched_action = 0;
     snake_score = 0;
     snake_len = 3;
     snake[0].x = 5; snake[0].y = 8;
@@ -1207,22 +1223,30 @@ void snake_paint() {
 }
 
 void snake_turn_left() {
-    if (snake_dead) {
-        leave_widget();
-    }
-    uint8_t snake_next_direction = (snake_direction + 4 + 1) % 4;
-    if((snake_next_direction + 2) % 4 != snake_tick_begin_direction) {
-        snake_direction = snake_next_direction;
-    }
+    snake_direction = (snake_direction + 4 + 1) % 4;
 }
 
 void snake_turn_right() {
+    snake_direction = (snake_direction + 4 - 1) % 4;
+}
+
+void snake_sched_turn_left() {
     if (snake_dead) {
         leave_widget();
+    } else if (snake_next_sched_action == 0) {
+        snake_next_sched_action = snake_turn_left;
+    } else {
+        snake_nextnext_sched_action = snake_turn_left;
     }
-    uint8_t snake_next_direction = (snake_direction + 4 - 1) % 4;
-    if((snake_next_direction + 2) % 4 != snake_tick_begin_direction) {
-        snake_direction = snake_next_direction;
+}
+
+void snake_sched_turn_right() {
+    if (snake_dead) {
+        leave_widget();
+    } else if (snake_next_sched_action == 0) {
+        snake_next_sched_action = snake_turn_right;
+    } else {
+        snake_nextnext_sched_action = snake_turn_right;
     }
 }
 
@@ -1323,8 +1347,8 @@ struct led_widget widgets[] = {
         .init = snake_init,
         .deinit = snake_deinit,
         .paint = snake_paint,
-        .menu_key_handler = snake_turn_left,
-        .power_key_handler = snake_turn_right,
+        .menu_key_handler = snake_sched_turn_left,
+        .power_key_handler = snake_sched_turn_right,
         .parent_idx = 0
     },
 };

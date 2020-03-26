@@ -40,5 +40,4 @@ struct led_widget {
     uint32_t parent_idx;
 };
 
-
 #endif
