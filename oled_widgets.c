@@ -146,7 +146,7 @@ char *main_lines[] = {
     "<Back>",
     "Signal info",
     "Radio mode",
-    "Fix TTL",
+    "TTL & IMEI",
     "Disable battery",
     "Add SSH key",
     "ADB daemon",
@@ -515,18 +515,21 @@ void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
 }
 
 void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
-    const int lines_per_page = 6;
+    const int lines_per_page = 7;
 
     const int page_first_item = curr_item / lines_per_page * lines_per_page;
 
     int i;
-    for (i = 0; i < lines_per_page && i < MAXITEMLEN && items[page_first_item + i][0]; i += 1) {
+    for (i = 0;
+         i < lines_per_page && (page_first_item + i) < MAXITEMLEN && items[page_first_item + i][0];
+         i += 1)
+    {
         char cur_line[MAXITEMLEN];
         strncpy(cur_line, items[page_first_item + i], MAXITEMLEN);
 
         int8_t y = 10 + i * 15;
         if (page_first_item == 0 && i > 0) {
-            y += 8;
+            y += 3;
         }
 
         if (page_first_item + i == curr_item) {
@@ -553,8 +556,8 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
         put_small_text(20, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, item_text);
     }
 
-    if (i == lines_per_page && i < MAXITEMLEN && items[i][0]) {
-        put_small_text(20, 115, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
+    if (i == lines_per_page && (i+page_first_item) < MAXITEMLEN && items[page_first_item + i][0]) {
+        put_small_text(20, 116, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
     }
 }
 
