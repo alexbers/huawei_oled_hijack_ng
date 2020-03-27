@@ -40,6 +40,7 @@ uint32_t active_widget = 0;
 // these are decared in the ends
 struct led_widget widgets[];
 const uint32_t WIDGETS_SIZE;
+const uint32_t USER_CUSTOM_SCRIPT_IDX;
 
 uint32_t lcd_timer = 0;
 uint32_t lcd_state = LED_ON;
@@ -153,9 +154,10 @@ char *main_lines[] = {
     "Matrix",
     "Video",
     "Snake",
+    "User scripts",
 };
 
-char main_lines_num = 10;
+char main_lines_num = 11;
 
 void main_init() {
     main_current_item = 0;
@@ -218,6 +220,9 @@ void main_power_key_pressed() {
             break;
         case 9:
             enter_widget(9);
+            break;
+        case 10:
+            enter_widget(10);
             break;
     }
 }
@@ -578,7 +583,7 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
 void menu_process_callback(int isgood, char* buf, uint8_t* curr_item, char items[][MAXITEMLEN]) {
     if(!isgood) {
         strcpy(items[0], "item:<- Back:");
-        strcpy(items[1], "text:call error");
+        strcpy(items[1], "text:Call error");
         for(int i = 2; i < MAXMENUITEMS; i += 1) {
             items[i][0] = 0;
         }
@@ -1267,6 +1272,82 @@ void snake_sched_turn_right() {
     }
 }
 
+// -------------------------------------- USER CUSTOM SCRIPT -------------------------
+const int MAXCUSTOMSCRIPTLEN = 128;
+char user_custom_script_script[MAXCUSTOMSCRIPTLEN] = {0};
+uint8_t user_custom_script_menu_cur_item = 0;
+char user_custom_script_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
+
+void user_custom_script_process_callback(int isgood, char* buf) {
+    menu_process_callback(isgood, buf, &user_custom_script_menu_cur_item, user_custom_script_menu_items);
+}
+
+void user_custom_script_init() {
+    init_menu(&user_custom_script_menu_cur_item, user_custom_script_menu_items);
+    create_process(user_custom_script_script, user_custom_script_process_callback);
+}
+
+void user_custom_script_paint() {
+    paint_menu(user_custom_script_menu_cur_item, user_custom_script_menu_items);
+}
+
+void user_custom_script_menu_key_pressed() {
+    next_menu_item(&user_custom_script_menu_cur_item, user_custom_script_menu_items);
+}
+
+void user_custom_script_power_key_pressed() {
+    execute_menu_item(user_custom_script_menu_cur_item, user_custom_script_menu_items,
+                      user_custom_script_script, user_custom_script_process_callback);
+}
+
+// -------------------------------------- USER SCRIPTS -------------------------
+
+char* user_scripts_script = "/app/oled_hijack/user_scripts.sh";
+uint8_t user_scripts_menu_cur_item = 0;
+char user_scripts_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
+
+void user_scripts_process_callback(int isgood, char* buf) {
+    menu_process_callback(isgood, buf, &user_scripts_menu_cur_item, user_scripts_menu_items);
+}
+
+void user_scripts_init() {
+    init_menu(&user_scripts_menu_cur_item, user_scripts_menu_items);
+    create_process(user_scripts_script, user_scripts_process_callback);
+}
+
+void user_scripts_paint() {
+    paint_menu(user_scripts_menu_cur_item, user_scripts_menu_items);
+}
+
+void user_scripts_menu_key_pressed() {
+    next_menu_item(&user_scripts_menu_cur_item, user_scripts_menu_items);
+}
+
+void user_scripts_power_key_pressed() {
+    char item_copy[MAXITEMLEN];
+    strncpy(item_copy, user_scripts_menu_items[user_scripts_menu_cur_item], MAXITEMLEN);
+
+    char *saveptr;
+    if (!strtok_r(item_copy, ":", &saveptr)) {
+        fprintf(stderr, "wrong menu item format: %s\n", item_copy);
+        leave_widget();
+        return;
+    }
+
+    if(!strtok_r(NULL, ":", &saveptr)) {
+        return;
+    }
+
+    char *action = strtok_r(NULL, ":", &saveptr);
+    if(!action || strlen(action) == 0) {
+        leave_widget();
+        return;
+    }
+
+    strncpy(user_custom_script_script, action, MAXCUSTOMSCRIPTLEN);
+    enter_widget(USER_CUSTOM_SCRIPT_IDX);
+}
+
 struct led_widget widgets[] = {
     {
         .name = "main",
@@ -1368,6 +1449,27 @@ struct led_widget widgets[] = {
         .power_key_handler = snake_sched_turn_right,
         .parent_idx = 0
     },
+    {
+        .name = "user scripts",
+        .lcd_sleep_ms = 20000,
+        .init = user_scripts_init,
+        .deinit = 0,
+        .paint = user_scripts_paint,
+        .menu_key_handler = user_scripts_menu_key_pressed,
+        .power_key_handler = user_scripts_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
+        .name = "user custom script",
+        .lcd_sleep_ms = 20000,
+        .init = user_custom_script_init,
+        .deinit = 0,
+        .paint = user_custom_script_paint,
+        .menu_key_handler = user_custom_script_menu_key_pressed,
+        .power_key_handler = user_custom_script_power_key_pressed,
+        .parent_idx = 10
+    },
 };
 
-const uint32_t WIDGETS_SIZE = 10;
+const uint32_t WIDGETS_SIZE = 12;
+const uint32_t USER_CUSTOM_SCRIPT_IDX = WIDGETS_SIZE - 1;
