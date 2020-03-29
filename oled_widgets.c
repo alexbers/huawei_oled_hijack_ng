@@ -524,7 +524,7 @@ void init_menu(uint8_t* curr_item, char items[][MAXITEMLEN]) {
 }
 
 void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
-    for(int i = 0; i < MAXMENUITEMS; i += 1) {
+    for(int i = 0; i <= MAXMENUITEMS; i += 1) {
         *curr_item += 1;
         if (items[*curr_item][0] == 0 && *curr_item >= MAXMENUITEMS) {
             *curr_item = 0;

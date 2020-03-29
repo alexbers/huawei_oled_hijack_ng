@@ -53,7 +53,7 @@ if [ "$#" -eq 1 ]; then
             echo 0 > /etc/disable_spe
             mount -o remount,ro /system
 
-            /etc/fix_ttl.sh
+            /etc/autorun.d/fix_ttl.sh
 
             if xtables-multi iptables -t mangle -C OUTPUT -o eth_x -j TTL --ttl-set 64; then
                 echo "text:Failed"
@@ -67,7 +67,7 @@ if [ "$#" -eq 1 ]; then
             echo 1 > /etc/disable_spe
             mount -o remount,ro /system
 
-            /etc/fix_ttl.sh
+            /etc/autorun.d/fix_ttl.sh
 
             if xtables-multi iptables -t mangle -C OUTPUT -o eth_x -j TTL --ttl-set 64; then
                 echo "text:Success"
