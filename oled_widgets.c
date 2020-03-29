@@ -170,7 +170,7 @@ void main_paint() {
 
     for (int i = 0; i < lines_per_page && page_first_item + i < main_lines_num; i += 1) {
         char* cur_line = main_lines[page_first_item + i];
-        uint8_t y = 5 + i * 15;
+        uint8_t y = 3 + i * 15;
 
         if (page_first_item + i != 0) {
             y += 3;
@@ -546,7 +546,7 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
         char cur_line[MAXITEMLEN];
         strncpy(cur_line, items[page_first_item + i], MAXITEMLEN);
 
-        int8_t y = 5 + i * 15;
+        int8_t y = 3 + i * 15;
         if (page_first_item == 0 && i > 0) {
             y += 3;
         }
