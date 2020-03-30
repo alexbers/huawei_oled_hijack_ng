@@ -310,7 +310,7 @@ void mobile_process_callback(int good, char *buf) {
 }
 
 void update_measurements() {
-    create_process("/app/oled_hijack/web_hook_client device signal 1 1", mobile_process_callback);
+    create_process("/app/hijacks/bin/web_hook_client device signal 1 1", mobile_process_callback);
 }
 
 void mobile_signal_init() {
@@ -630,7 +630,7 @@ void execute_menu_item(uint8_t curr_item, char items[][MAXITEMLEN], char *script
 }
 // ---------------------------------- NO BATTERY MODE --------------------------
 
-char* no_battery_mode_script = "/app/oled_hijack/no_battery_mode.sh";
+char* no_battery_mode_script = "/app/hijacks/scripts/no_battery_mode.sh";
 uint8_t no_battery_mode_menu_cur_item = 0;
 char no_battery_mode_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -659,7 +659,7 @@ void no_battery_mode_power_key_pressed() {
 
 // -------------------------------------- RADIO MODE -------------------------
 
-char* radio_mode_script = "/app/oled_hijack/radio_mode.sh";
+char* radio_mode_script = "/app/hijacks/scripts/radio_mode.sh";
 uint8_t radio_mode_menu_cur_item = 0;
 char radio_mode_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -687,7 +687,7 @@ void radio_mode_power_key_pressed() {
 
 // ------------------------------------- TTL and IMEI --------------------------
 
-char* ttl_and_imei_script = "/app/oled_hijack/ttl_and_imei.sh";
+char* ttl_and_imei_script = "/app/hijacks/scripts/ttl_and_imei.sh";
 uint8_t ttl_and_imei_menu_cur_item = 0;
 char ttl_and_imei_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -1302,7 +1302,7 @@ void user_custom_script_power_key_pressed() {
 
 // -------------------------------------- USER SCRIPTS -------------------------
 
-char* user_scripts_script = "/app/oled_hijack/user_scripts.sh";
+char* user_scripts_script = "/app/hijacks/scripts/user_scripts.sh";
 uint8_t user_scripts_menu_cur_item = 0;
 char user_scripts_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
