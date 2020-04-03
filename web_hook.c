@@ -246,6 +246,8 @@ int main(int argc, char* argv[]) {
     ssize_t rsize;
     char buf[BUFSIZE];
 
+    alarm(60);
+
     if (argc != 5) {
         puts("Need 4 arguments: <subsystemname> <funcname> <1 for get, 2 for post> <data>");
         exit(EXIT_FAILURE);
