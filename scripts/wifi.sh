@@ -389,11 +389,11 @@ end
 WIFI_STATUS='
 print("text:Wi-Fi:")
 if at_least_one_wifi_enabled() then
-    print("item: <On>:WIFI_ON")
-    print("item:  Off:WIFI_OFF")
+    print("item:<On>:WIFI_ON")
+    print("item: Off:WIFI_OFF")
 else
-    print("item:  On:WIFI_ON")
-    print("item: <Off>:WIFI_OFF")
+    print("item: On:WIFI_ON")
+    print("item:<Off>:WIFI_OFF")
 end
 
 hosts = get_hosts_table()
@@ -402,9 +402,9 @@ not_active_hosts = get_not_active_hosts(hosts)
 
 print("pagebreak:")
 print("text:Clients:")
-print("item:  Active ("..table.getn(active_hosts).."):WIFI_ACTIVE_CLIENTS")
-print("item:  Old ("..table.getn(not_active_hosts).."):WIFI_NOT_ACTIVE_CLIENTS")
-print("item:  Banned (".. get_banned_mac_count() .. "):WIFI_BANNED_CLIENTS")
+print("item:Active ("..table.getn(active_hosts).."):WIFI_ACTIVE_CLIENTS")
+print("item:Old ("..table.getn(not_active_hosts).."):WIFI_NOT_ACTIVE_CLIENTS")
+print("item:Banned (".. get_banned_mac_count() .. "):WIFI_BANNED_CLIENTS")
 '
 
 WIFI_ON='
@@ -432,12 +432,12 @@ hosts = get_hosts_table()
 active_hosts = get_active_hosts(hosts)
 
 for num, host in pairs(active_hosts) do
-    print("text: " .. sanitize_hostname(host.HostName))
-    print("text: " .. host.IpAddress)
-    print("text: " .. host.MacAddress)
-    print("text: RSSI: " .. host.Rssi .."dBm")
-    print("text: Up: " .. format_time(host.AssociatedTime))
-    print("item: <Ban>:BAN_" .. host.MacAddress)
+    print("text:" .. sanitize_hostname(host.HostName))
+    print("text:" .. host.IpAddress)
+    print("text:" .. host.MacAddress)
+    print("text:RSSI: " .. host.Rssi .."dBm")
+    print("text:Up: " .. format_time(host.AssociatedTime))
+    print("item:<Ban>:BAN_" .. host.MacAddress)
     print("pagebreak:")
 end
 '
@@ -447,11 +447,11 @@ hosts = get_hosts_table()
 not_active_hosts = get_not_active_hosts(hosts)
 
 for num, host in pairs(not_active_hosts) do
-    print("text: " .. sanitize_hostname(host.HostName))
-    print("text: " .. host.IpAddress)
-    print("text: " .. host.MacAddress)
-    print("text: Left: " .. format_time(host.LeaseTime))
-    print("item: <Ban>:BAN_" .. host.MacAddress)
+    print("text:" .. sanitize_hostname(host.HostName))
+    print("text:" .. host.IpAddress)
+    print("text:" .. host.MacAddress)
+    print("text:Left: " .. format_time(host.LeaseTime))
+    print("item:<Ban>:BAN_" .. host.MacAddress)
     print("pagebreak:")
 end
 '
@@ -460,9 +460,9 @@ WIFI_BANNED_CLIENTS='
 banned_hosts = get_banned_hosts()
 
 for mac, name in pairs(banned_hosts) do
-    print("text: " .. sanitize_hostname(name))
-    print("text: " .. mac)
-    print("item: <Unban>:UNBAN_" .. mac)
+    print("text:" .. sanitize_hostname(name))
+    print("text:" .. mac)
+    print("item:<Unban>:UNBAN_" .. mac)
     print("pagebreak:")
 end
 '

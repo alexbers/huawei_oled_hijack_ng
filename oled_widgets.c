@@ -577,10 +577,12 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
             continue;
         }
 
+        int8_t x = 20;
         char *item_text;
         if (strcmp(item_type, "item") == 0) {
             item_text = strtok_r(NULL, ":", &saveptr);
         } else {
+            x = 5;
             item_text = strtok_r(NULL, "\n", &saveptr);
         }
 
@@ -588,7 +590,7 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
             continue;
         }
 
-        put_small_text(20, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, item_text);
+        put_small_text(x, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, item_text);
     }
 
     if (i == LINES_PER_PAGE && (i+page_first_item) < MAXITEMLEN && items[page_first_item + i][0]) {
