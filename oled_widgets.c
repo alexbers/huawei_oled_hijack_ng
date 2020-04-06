@@ -313,8 +313,17 @@ void mobile_process_callback(int good, char *buf) {
     repaint();
 }
 
+
 void update_measurements() {
     create_process("/app/hijacks/bin/web_hook_client device signal 1 1", mobile_process_callback);
+}
+
+void init_measurements_callback(int isgood, char *buf) {
+    UNUSED(isgood);
+    UNUSED(buf);
+
+    update_measurements();
+    mobile_timer = timer_create_ex(1000, 1, update_measurements, 0);
 }
 
 void mobile_signal_init() {
@@ -322,13 +331,13 @@ void mobile_signal_init() {
     mobile_ul_bw = mobile_dl_bw = mobile_band = 0;
 
     mobile_graph_mode = 1;
+    mobile_timer = 0;
 
     for (int i = 0; i < MAX_LAST_RSSI; i += 1) {
         last_rssi[i] = 0;
     }
 
-    update_measurements();
-    mobile_timer = timer_create_ex(1000, 1, update_measurements, 0);
+    create_process("/system/xbin/atc AT^RSSI=1", init_measurements_callback);
 }
 
 void mobile_signal_deinit() {
