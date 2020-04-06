@@ -37,7 +37,7 @@ extern struct lcd_screen secret_screen;
 
 uint32_t active_widget = 0;
 
-// these are decared in the ends
+// these are decared in the end
 struct led_widget widgets[];
 const uint32_t WIDGETS_SIZE;
 const uint32_t USER_CUSTOM_SCRIPT_IDX;
@@ -147,6 +147,7 @@ char *main_lines[] = {
     "<- Back",
     "Signal info",
     "Radio mode",
+    "Wi-Fi",
     "TTL & IMEI",
     "Disable battery",
     "Add SSH key",
@@ -157,7 +158,7 @@ char *main_lines[] = {
     "User scripts",
 };
 
-char main_lines_num = 11;
+char main_lines_num = 12;
 
 void main_init() {
     main_current_item = 0;
@@ -223,6 +224,9 @@ void main_power_key_pressed() {
             break;
         case 10:
             enter_widget(10);
+            break;
+        case 11:
+            enter_widget(11);
             break;
     }
 }
@@ -493,6 +497,9 @@ void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
 
         if (strncmp(line, "pagebreak:", 10) == 0) {
             int items_to_insert = LINES_PER_PAGE - (item % LINES_PER_PAGE);
+            if (items_to_insert == LINES_PER_PAGE) {
+                items_to_insert = 0;
+            }
             for (int i = 0; i < items_to_insert; i += 1) {
                 strncpy(items[item], "text:", MAXITEMLEN);
                 item += 1;
@@ -614,7 +621,7 @@ void execute_menu_item(uint8_t curr_item, char items[][MAXITEMLEN], char *script
         return;
     }
 
-    char *action = strtok_r(NULL, ":", &saveptr);
+    char *action = strtok_r(NULL, "\n", &saveptr);
     if(!action || strlen(action) == 0) {
         leave_widget();
         return;
@@ -683,6 +690,34 @@ void radio_mode_menu_key_pressed() {
 void radio_mode_power_key_pressed() {
     execute_menu_item(radio_mode_menu_cur_item, radio_mode_menu_items,
                       radio_mode_script, radio_mode_process_callback);
+}
+
+// ------------------------------------- WI-FI ------------------------------
+
+char* wifi_script = "/app/hijacks/scripts/wifi.sh";
+uint8_t wifi_menu_cur_item = 0;
+char wifi_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
+
+void wifi_process_callback(int isgood, char* buf) {
+    menu_process_callback(isgood, buf, &wifi_menu_cur_item, wifi_menu_items);
+}
+
+void wifi_init() {
+    init_menu(&wifi_menu_cur_item, wifi_menu_items);
+    create_process(wifi_script, wifi_process_callback);
+}
+
+void wifi_paint() {
+    paint_menu(wifi_menu_cur_item, wifi_menu_items);
+}
+
+void wifi_menu_key_pressed() {
+    next_menu_item(&wifi_menu_cur_item, wifi_menu_items);
+}
+
+void wifi_power_key_pressed() {
+    execute_menu_item(wifi_menu_cur_item, wifi_menu_items,
+                      wifi_script, wifi_process_callback);
 }
 
 // ------------------------------------- TTL and IMEI --------------------------
@@ -1348,7 +1383,11 @@ void user_scripts_power_key_pressed() {
     enter_widget(USER_CUSTOM_SCRIPT_IDX);
 }
 
-struct led_widget widgets[] = {
+const uint32_t WIDGETS_SIZE = 13;
+const uint32_t USER_CUSTOM_SCRIPT_IDX = WIDGETS_SIZE - 1;
+const uint32_t USER_CUSTOM_SCRIPTS_IDX = WIDGETS_SIZE - 2;
+
+struct led_widget widgets[WIDGETS_SIZE] = {
     {
         .name = "main",
         .lcd_sleep_ms = 20000,
@@ -1377,6 +1416,16 @@ struct led_widget widgets[] = {
         .paint = radio_mode_paint,
         .menu_key_handler = radio_mode_menu_key_pressed,
         .power_key_handler = radio_mode_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
+        .name = "wifi",
+        .lcd_sleep_ms = 15000,
+        .init = wifi_init,
+        .deinit = 0,
+        .paint = wifi_paint,
+        .menu_key_handler = wifi_menu_key_pressed,
+        .power_key_handler = wifi_power_key_pressed,
         .parent_idx = 0
     },
     {
@@ -1467,9 +1516,6 @@ struct led_widget widgets[] = {
         .paint = user_custom_script_paint,
         .menu_key_handler = user_custom_script_menu_key_pressed,
         .power_key_handler = user_custom_script_power_key_pressed,
-        .parent_idx = 10
+        .parent_idx = USER_CUSTOM_SCRIPTS_IDX
     },
 };
-
-const uint32_t WIDGETS_SIZE = 12;
-const uint32_t USER_CUSTOM_SCRIPT_IDX = WIDGETS_SIZE - 1;
