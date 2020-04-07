@@ -145,6 +145,7 @@ uint8_t main_current_item;
 
 char *main_lines[] = {
     "<- Back",
+    "SMS & USSD",
     "Signal info",
     "Radio mode",
     "Wi-Fi",
@@ -158,7 +159,7 @@ char *main_lines[] = {
     "User scripts",
 };
 
-char main_lines_num = 12;
+char main_lines_num = 13;
 
 void main_init() {
     main_current_item = 0;
@@ -227,6 +228,9 @@ void main_power_key_pressed() {
             break;
         case 11:
             enter_widget(11);
+            break;
+        case 12:
+            enter_widget(12);
             break;
     }
 }
@@ -315,7 +319,7 @@ void mobile_process_callback(int good, char *buf) {
 
 
 void update_measurements() {
-    create_process("/app/hijacks/bin/device_webhook_client device signal 1 1", mobile_process_callback);
+    create_process("/app/hijack/bin/device_webhook_client device signal 1 1", mobile_process_callback);
 }
 
 void init_measurements_callback(int isgood, char *buf) {
@@ -487,8 +491,8 @@ void mobile_switch_mode() {
 
 
 // ---------------------------- COMMON EXTERNAL MENU FUNCTIONS -------------------------
-const uint8_t MAXMENUITEMS = 32;
-const int MAXITEMLEN = 128;
+const uint8_t MAXMENUITEMS = 128;
+const int MAXITEMLEN = 64;
 const int LINES_PER_PAGE = 7;
 
 void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
@@ -556,7 +560,7 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
 
     int i;
     for (i = 0;
-         i < LINES_PER_PAGE && (page_first_item + i) < MAXITEMLEN && items[page_first_item + i][0];
+         i < LINES_PER_PAGE && (page_first_item + i) < MAXMENUITEMS && items[page_first_item + i][0];
          i += 1)
     {
         char cur_line[MAXITEMLEN];
@@ -648,7 +652,7 @@ void execute_menu_item(uint8_t curr_item, char items[][MAXITEMLEN], char *script
 }
 // ---------------------------------- NO BATTERY MODE --------------------------
 
-char* no_battery_mode_script = "/app/hijacks/scripts/no_battery_mode.sh";
+char* no_battery_mode_script = "/app/hijack/scripts/no_battery_mode.sh";
 uint8_t no_battery_mode_menu_cur_item = 0;
 char no_battery_mode_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -674,10 +678,37 @@ void no_battery_mode_power_key_pressed() {
                       no_battery_mode_script, no_battery_mode_process_callback);
 }
 
+// -------------------------------------- SMS AND USSD  -------------------------
+
+char* sms_and_ussd_script = "/app/hijack/scripts/sms_and_ussd.sh";
+uint8_t sms_and_ussd_menu_cur_item = 0;
+char sms_and_ussd_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
+
+void sms_and_ussd_process_callback(int isgood, char* buf) {
+    menu_process_callback(isgood, buf, &sms_and_ussd_menu_cur_item, sms_and_ussd_menu_items);
+}
+
+void sms_and_ussd_init() {
+    init_menu(&sms_and_ussd_menu_cur_item, sms_and_ussd_menu_items);
+    create_process(sms_and_ussd_script, sms_and_ussd_process_callback);
+}
+
+void sms_and_ussd_paint() {
+    paint_menu(sms_and_ussd_menu_cur_item, sms_and_ussd_menu_items);
+}
+
+void sms_and_ussd_menu_key_pressed() {
+    next_menu_item(&sms_and_ussd_menu_cur_item, sms_and_ussd_menu_items);
+}
+
+void sms_and_ussd_power_key_pressed() {
+    execute_menu_item(sms_and_ussd_menu_cur_item, sms_and_ussd_menu_items,
+                      sms_and_ussd_script, sms_and_ussd_process_callback);
+}
 
 // -------------------------------------- RADIO MODE -------------------------
 
-char* radio_mode_script = "/app/hijacks/scripts/radio_mode.sh";
+char* radio_mode_script = "/app/hijack/scripts/radio_mode.sh";
 uint8_t radio_mode_menu_cur_item = 0;
 char radio_mode_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -705,7 +736,7 @@ void radio_mode_power_key_pressed() {
 
 // ------------------------------------- WI-FI ------------------------------
 
-char* wifi_script = "/app/hijacks/scripts/wifi.sh";
+char* wifi_script = "/app/hijack/scripts/wifi.sh";
 uint8_t wifi_menu_cur_item = 0;
 char wifi_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -733,7 +764,7 @@ void wifi_power_key_pressed() {
 
 // ------------------------------------- TTL and IMEI --------------------------
 
-char* ttl_and_imei_script = "/app/hijacks/scripts/ttl_and_imei.sh";
+char* ttl_and_imei_script = "/app/hijack/scripts/ttl_and_imei.sh";
 uint8_t ttl_and_imei_menu_cur_item = 0;
 char ttl_and_imei_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -1348,7 +1379,7 @@ void user_custom_script_power_key_pressed() {
 
 // -------------------------------------- USER SCRIPTS -------------------------
 
-char* user_scripts_script = "/app/hijacks/scripts/user_scripts.sh";
+char* user_scripts_script = "/app/hijack/scripts/user_scripts.sh";
 uint8_t user_scripts_menu_cur_item = 0;
 char user_scripts_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
 
@@ -1394,7 +1425,7 @@ void user_scripts_power_key_pressed() {
     enter_widget(USER_CUSTOM_SCRIPT_IDX);
 }
 
-const uint32_t WIDGETS_SIZE = 13;
+const uint32_t WIDGETS_SIZE = 14;
 const uint32_t USER_CUSTOM_SCRIPT_IDX = WIDGETS_SIZE - 1;
 const uint32_t USER_CUSTOM_SCRIPTS_IDX = WIDGETS_SIZE - 2;
 
@@ -1407,6 +1438,16 @@ struct led_widget widgets[WIDGETS_SIZE] = {
         .paint = main_paint,
         .menu_key_handler = main_menu_key_pressed,
         .power_key_handler = main_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
+        .name = "sms and ussd",
+        .lcd_sleep_ms = 60000,
+        .init = sms_and_ussd_init,
+        .deinit = 0,
+        .paint = sms_and_ussd_paint,
+        .menu_key_handler = sms_and_ussd_menu_key_pressed,
+        .power_key_handler = sms_and_ussd_power_key_pressed,
         .parent_idx = 0
     },
     {
