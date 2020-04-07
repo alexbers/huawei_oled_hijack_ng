@@ -145,9 +145,9 @@ uint8_t main_current_item;
 
 char *main_lines[] = {
     "<- Back",
-    "SMS & USSD",
     "Signal info",
     "Radio mode",
+    "SMS & USSD",
     "Wi-Fi",
     "TTL & IMEI",
     "Disable battery",
@@ -504,8 +504,9 @@ void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
     while(line) {
         if(strlen(line) >= MAXITEMLEN-1) {
             fprintf(stderr, "line is too long: %s, aborting parse\n", line);
-            items[1][0] = 0;
-            break;
+            items[item][0] = 0;
+            line = strtok_r(NULL, "\n", &saveptr);
+            continue;
         }
 
         if (strncmp(line, "pagebreak:", 10) == 0) {
@@ -544,10 +545,14 @@ void init_menu(uint8_t* curr_item, char items[][MAXITEMLEN]) {
 }
 
 void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
-    for(int i = 0; i <= MAXMENUITEMS; i += 1) {
-        *curr_item += 1;
-        if (items[*curr_item][0] == 0 && *curr_item >= MAXMENUITEMS) {
+    int first_item_on_page = *curr_item / LINES_PER_PAGE * LINES_PER_PAGE;
+    int last_item_to_consider = first_item_on_page + 2*LINES_PER_PAGE - 1;
+
+    for(*curr_item += 1; *curr_item <= last_item_to_consider; *curr_item += 1) {
+        if (items[*curr_item][0] == 0 || *curr_item >= MAXMENUITEMS) {
+            // this should be always the back button
             *curr_item = 0;
+            return;
         }
         if(strncmp(items[*curr_item], "item:", 5) == 0) {
             return;
@@ -571,9 +576,6 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
             y += 3;
         }
 
-        if (page_first_item + i == curr_item) {
-            put_small_text(5, y, LCD_WIDTH, LCD_HEIGHT, 255,0,255, "#");
-        }
 
         char *saveptr;
         char *item_type = strtok_r(cur_line, ":", &saveptr);
@@ -581,9 +583,16 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
             continue;
         }
 
-        int8_t x = 20;
+        int is_item = (strcmp(item_type, "item") == 0);
+
+        if (page_first_item + i == curr_item && is_item) {
+            put_small_text(5, y, LCD_WIDTH, LCD_HEIGHT, 255,0,255, "#");
+        }
+
+        int8_t x;
         char *item_text;
-        if (strcmp(item_type, "item") == 0) {
+        if (is_item) {
+            x = 20;
             item_text = strtok_r(NULL, ":", &saveptr);
         } else {
             x = 5;
@@ -626,9 +635,15 @@ void execute_menu_item(uint8_t curr_item, char items[][MAXITEMLEN], char *script
     strncpy(item_copy, items[curr_item], MAXITEMLEN);
 
     char *saveptr;
-    if (!strtok_r(item_copy, ":", &saveptr)) {
+    char *item_type = strtok_r(item_copy, ":", &saveptr);
+
+    if (!item_type) {
         fprintf(stderr, "wrong menu item format: %s\n", item_copy);
         leave_widget();
+        return;
+    }
+
+    if (strcmp(item_type, "item") != 0) {
         return;
     }
 
@@ -1441,16 +1456,6 @@ struct led_widget widgets[WIDGETS_SIZE] = {
         .parent_idx = 0
     },
     {
-        .name = "sms and ussd",
-        .lcd_sleep_ms = 60000,
-        .init = sms_and_ussd_init,
-        .deinit = 0,
-        .paint = sms_and_ussd_paint,
-        .menu_key_handler = sms_and_ussd_menu_key_pressed,
-        .power_key_handler = sms_and_ussd_power_key_pressed,
-        .parent_idx = 0
-    },
-    {
         .name = "mobile signal",
         .lcd_sleep_ms = 600000,
         .init = mobile_signal_init,
@@ -1468,6 +1473,16 @@ struct led_widget widgets[WIDGETS_SIZE] = {
         .paint = radio_mode_paint,
         .menu_key_handler = radio_mode_menu_key_pressed,
         .power_key_handler = radio_mode_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
+        .name = "sms and ussd",
+        .lcd_sleep_ms = 60000,
+        .init = sms_and_ussd_init,
+        .deinit = 0,
+        .paint = sms_and_ussd_paint,
+        .menu_key_handler = sms_and_ussd_menu_key_pressed,
+        .power_key_handler = sms_and_ussd_power_key_pressed,
         .parent_idx = 0
     },
     {
