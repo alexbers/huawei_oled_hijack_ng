@@ -25,6 +25,7 @@ extern void put_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, ui
 extern void put_small_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t green, uint8_t blue, char *text);
 extern void put_large_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t green, uint8_t blue, char *text);
 extern void put_raw_buffer(uint8_t* from, uint32_t len);
+extern int get_bytes_num_fit_by_width(uint8_t x, uint8_t w, uint8_t *text, uint8_t* font_widths);
 
 extern uint32_t (*timer_create_ex)(uint32_t, uint32_t, void (*)(), uint32_t);
 extern uint32_t (*timer_delete_ex)(uint32_t);
@@ -502,13 +503,6 @@ void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
 
     char *line = strtok_r(buf, "\n", &saveptr);
     while(line) {
-        if(strlen(line) >= MAXITEMLEN-1) {
-            fprintf(stderr, "line is too long: %s, aborting parse\n", line);
-            items[item][0] = 0;
-            line = strtok_r(NULL, "\n", &saveptr);
-            continue;
-        }
-
         if (strncmp(line, "pagebreak:", 10) == 0) {
             int items_to_insert = LINES_PER_PAGE - (item % LINES_PER_PAGE);
             if (items_to_insert == LINES_PER_PAGE) {
@@ -518,19 +512,51 @@ void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
                 strncpy(items[item], "text:", MAXITEMLEN);
                 item += 1;
                 if(item >= MAXMENUITEMS - 1) {
-                    break;
+                    goto clear_rest_items;
                 }
             }
-        } else if (strncmp(line, "item:", 5) == 0 || strncmp(line, "text:", 5) == 0) {
+        } else if (strncmp(line, "item:", 5) == 0) {
+            if(strlen(line) >= MAXITEMLEN-1) {
+                fprintf(stderr, "line is too long: %s, aborting parse\n", line);
+                items[item][0] = 0;
+                line = strtok_r(NULL, "\n", &saveptr);
+                continue;
+            }
             strncpy(items[item], line, MAXITEMLEN);
             item += 1;
             if(item >= MAXMENUITEMS-1) {
-                break;
+                goto clear_rest_items;
             }
+        } else if (strncmp(line, "text:", 5) == 0) {
+            for (uint32_t pos = strlen("text:"); pos < strlen(line); ) {
+                int w = get_bytes_num_fit_by_width(5, LCD_WIDTH, (uint8_t*)line+pos, SMALL_FONT_WIDTHS);
+                if(line[pos + w] != 0) {
+                    char *last_space_ptr = memrchr(line+pos, ' ', w);
+                    if (last_space_ptr) {
+                        w = last_space_ptr - (line+pos) + 1;
+                        if(line[pos + w] == ' ') {
+                            w += 1;
+                        }
+                    }
+                }
+                if(w == 0 || w + 5 >= MAXITEMLEN - 1) {
+                    break;
+                }
+
+                strncpy(items[item], "text:", MAXITEMLEN);
+                strncat(items[item], line+pos, MIN(w, MAXITEMLEN));
+                pos += w;
+                item += 1;
+                if(item >= MAXMENUITEMS-1) {
+                    goto clear_rest_items;
+                }
+            }
+
         }
 
         line = strtok_r(NULL, "\n", &saveptr);
     }
+clear_rest_items:
     for (int i = item; i < MAXMENUITEMS; i += 1) {
         items[i][0] = 0;
     }
@@ -548,15 +574,18 @@ void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
     int first_item_on_page = *curr_item / LINES_PER_PAGE * LINES_PER_PAGE;
     int last_item_to_consider = first_item_on_page + 2*LINES_PER_PAGE - 1;
 
-    for(*curr_item += 1; *curr_item <= last_item_to_consider; *curr_item += 1) {
+    for(*curr_item += 1; *curr_item < last_item_to_consider; *curr_item += 1) {
         if (items[*curr_item][0] == 0 || *curr_item >= MAXMENUITEMS) {
             // this should be always the back button
-            *curr_item = 0;
-            return;
+            break;
         }
         if(strncmp(items[*curr_item], "item:", 5) == 0) {
             return;
         }
+    }
+    if (items[*curr_item][0] == 0 || *curr_item >= MAXMENUITEMS) {
+        // this should be always the back button
+        *curr_item = 0;
     }
 }
 
@@ -606,7 +635,7 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
         put_small_text(x, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, item_text);
     }
 
-    if (i == LINES_PER_PAGE && (i+page_first_item) < MAXITEMLEN && items[page_first_item + i][0]) {
+    if (i == LINES_PER_PAGE && (i+page_first_item) < MAXMENUITEMS && items[page_first_item + i][0]) {
         put_small_text(20, 112, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
     }
 }

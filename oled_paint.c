@@ -53,12 +53,12 @@ void put_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
     int char_y = y;
 
     while(*text) {
-        uint8_t char_width = font_widths[*text];
+        uint8_t char_idx = get_char_idx_and_go_next(&text);
+        uint8_t char_width = font_widths[char_idx];
 
-        if(*text == '\n') {
+        if(char_idx == '\n') {
             char_x = x;
             char_y += font_y_size;
-            text += 1;
             continue;
         }
 
@@ -74,16 +74,28 @@ void put_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
                 int letter_idx = letter_y * font_bytes_per_char + (letter_x / 8);
 
                 int bit_idx = 7 - (letter_x % 8);
-                if(font[*text * font_bytes_per_char*font_y_size + letter_idx] & (0x1 << bit_idx)) {
+                if(font[char_idx * font_bytes_per_char*font_y_size + letter_idx] & (0x1 << bit_idx)) {
                     put_pixel(cur_x, cur_y, red, green, blue);
                 }
             }
         }
 
         char_x += char_width;
-
-        text += 1;
     }
+}
+
+uint32_t get_bytes_num_fit_by_width(uint8_t x, uint8_t w, uint8_t *text, uint8_t* font_widths) {
+    uint8_t *start_text = text;
+    uint8_t *last_good_text = start_text;
+    while(x < w) {
+        last_good_text = text;
+        if(!*text) {
+            break;
+        }
+        uint8_t char_idx = get_char_idx_and_go_next(&text);
+        x += font_widths[char_idx];
+    }
+    return last_good_text - start_text;
 }
 
 void put_small_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
