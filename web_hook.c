@@ -53,6 +53,8 @@ static void* (*webserver_r_h_real)(
     int subsystemnum, const char *subsystemname,
     void* hookfunction, void* global_release_msg) = NULL;
 
+static ssize_t (*readlink_real)(const char *pathname, char *buf, size_t bufsiz) = NULL;
+
 // Pointer to real "global_release_msg" function
 static void (*global_release_msg_real)(void *ptr) = NULL;
 
@@ -183,7 +185,6 @@ static void* web_hookserver(void* nothing) {
     return 0;
 }
 
-
 void* webserver_register_hookfunction(int subsystemnum, const char *subsystemname,
                                     void* hookfunction, void *global_release_msg)
 {
@@ -217,6 +218,25 @@ void* webserver_register_hookfunction(int subsystemnum, const char *subsystemnam
 
     return webserver_r_h_real(subsystemnum, subsystemname, hookfunction, global_release_msg);
 }
+
+ssize_t readlink(const char *pathname, char *buf, size_t bufsiz) {
+    if (!readlink_real) {
+        readlink_real = dlsym(RTLD_NEXT, "readlink");
+    }
+
+    ssize_t ret = readlink_real(pathname, buf, bufsiz);
+
+    if (ret == -1) {
+        return ret;
+    }
+
+    if (strcmp(buf, "/app/bin/sms.orig") == 0) {
+        strcpy(buf, "/app/bin/sms");
+    }
+
+    return ret;
+}
+
 #endif
 
 // Building web_hook_client

@@ -315,7 +315,7 @@ void mobile_process_callback(int good, char *buf) {
 
 
 void update_measurements() {
-    create_process("/app/hijacks/bin/web_hook_client device signal 1 1", mobile_process_callback);
+    create_process("/app/hijacks/bin/device_webhook_client device signal 1 1", mobile_process_callback);
 }
 
 void init_measurements_callback(int isgood, char *buf) {
