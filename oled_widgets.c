@@ -30,6 +30,7 @@ extern int get_bytes_num_fit_by_width(uint8_t x, uint8_t w, uint8_t *text, uint8
 extern uint32_t (*timer_create_ex)(uint32_t, uint32_t, void (*)(), uint32_t);
 extern uint32_t (*timer_delete_ex)(uint32_t);
 
+int process_is_alive();
 int create_process(char* command, void (*finish_callback)(int, char *));
 void destroy_process();
 void destroy_process_pooler();
@@ -579,6 +580,12 @@ void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
             // this should be always the back button
             break;
         }
+
+        // before the wrap, check if we saw the last page
+        if (*curr_item+1 < MAXMENUITEMS && items[*curr_item+1][0] == 0 &&
+            (*curr_item - first_item_on_page ) >= LINES_PER_PAGE) {
+            break;
+        }
         if(strncmp(items[*curr_item], "item:", 5) == 0) {
             return;
         }
@@ -727,14 +734,62 @@ void no_battery_mode_power_key_pressed() {
 char* sms_and_ussd_script = "/app/hijack/scripts/sms_and_ussd.sh";
 uint8_t sms_and_ussd_menu_cur_item = 0;
 char sms_and_ussd_menu_items[MAXMENUITEMS][MAXITEMLEN] = {};
+uint32_t sms_and_ussd_timer = 0;
+uint32_t sms_and_ussd_ticks_since_last_good = 0;
 
 void sms_and_ussd_process_callback(int isgood, char* buf) {
     menu_process_callback(isgood, buf, &sms_and_ussd_menu_cur_item, sms_and_ussd_menu_items);
+    repaint();
+}
+
+void sms_and_ussd_data_available_pooler() {
+    const char *MAGIC_LINE1 = "text:USSD Sent";
+    const char *MAGIC_LINE2 = "text:Awaiting the answer";
+    int first_line_is_good = strcmp(sms_and_ussd_menu_items[1], MAGIC_LINE1)==0;
+    int second_line_is_good = strcmp(sms_and_ussd_menu_items[2], MAGIC_LINE2)==0;
+
+    char cmdbuf[MAXITEMLEN];
+
+    if (first_line_is_good && second_line_is_good) {
+        sms_and_ussd_ticks_since_last_good += 1;
+        snprintf(cmdbuf, MAXITEMLEN, "%s USSD_GET %d", sms_and_ussd_script, sms_and_ussd_ticks_since_last_good);
+        create_process(cmdbuf, sms_and_ussd_process_callback);
+
+        fprintf(stderr, "pooler yes\n");
+
+    } else {
+        sms_and_ussd_ticks_since_last_good = 0;
+        fprintf(stderr, "pooler no\n");
+    }
 }
 
 void sms_and_ussd_init() {
+    sms_and_ussd_ticks_since_last_good = 0;
+    sms_and_ussd_timer = timer_create_ex(1000, 1, sms_and_ussd_data_available_pooler, 0);
     init_menu(&sms_and_ussd_menu_cur_item, sms_and_ussd_menu_items);
     create_process(sms_and_ussd_script, sms_and_ussd_process_callback);
+}
+
+void sms_and_ussd_empty_callback(int isgood, char* buf) {
+    UNUSED(isgood);
+    UNUSED(buf);
+}
+
+void sms_and_ussd_deinit() {
+    if (sms_and_ussd_timer) {
+        timer_delete_ex(sms_and_ussd_timer);
+        sms_and_ussd_timer = 0;
+    }
+    char cmdbuf[MAXITEMLEN];
+    snprintf(cmdbuf, MAXITEMLEN, "%s USSD_RELEASE", sms_and_ussd_script);
+    create_process(cmdbuf, sms_and_ussd_process_callback);
+    // wait up to a 1 sec for process finish
+    for (int i = 0; i < 100; i += 1) {
+        usleep( 10000 );
+        if (!process_is_alive()) {
+            break;
+        }
+    }
 }
 
 void sms_and_ussd_paint() {
@@ -1508,7 +1563,7 @@ struct led_widget widgets[WIDGETS_SIZE] = {
         .name = "sms and ussd",
         .lcd_sleep_ms = 60000,
         .init = sms_and_ussd_init,
-        .deinit = 0,
+        .deinit = sms_and_ussd_deinit,
         .paint = sms_and_ussd_paint,
         .menu_key_handler = sms_and_ussd_menu_key_pressed,
         .power_key_handler = sms_and_ussd_power_key_pressed,

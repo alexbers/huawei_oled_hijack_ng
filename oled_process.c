@@ -69,6 +69,10 @@ int create_process(char* command, void (*finish_callback)(int, char *)) {
     return 0;
 }
 
+int process_is_alive() {
+    return child_pid > 0;
+}
+
 void process_consume_data() {
     if (child_pid == 0) {
         return;
