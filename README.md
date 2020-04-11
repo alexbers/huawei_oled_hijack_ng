@@ -6,7 +6,19 @@ This is achieved by hijacking certain library calls in the "oled" executable fil
 
 The menu can be activated with long menu key press.
 
-** The project is in pre-alpha state. Many features are absent. Use at own risk. ***
+![Menu 1](https://i.imgur.com/5S8vXyV.png)
+![Signal 1](https://i.imgur.com/OFwKXiG.png)
+![Signal 2](https://i.imgur.com/or7uaIQ.png)
+![USSD](https://i.imgur.com/r7jMkhF.png)
+![Sms 1](https://i.imgur.com/uf6ZMB9.png)
+![Sms 2](https://i.imgur.com/Y3bpAD6.png)
+![Menu 2](https://i.imgur.com/WHYpMrk.png)
+![SSH](https://i.imgur.com/T5CxgVu.png)
+![ADBD](https://i.imgur.com/dJDRfIw.png)
+![VPN](https://i.imgur.com/8AdwUPl.png)
+![Snake](https://i.imgur.com/SmzjVw6.png)
+![Matrix](https://i.imgur.com/arRx9Ve.png)
+
 
 ## How does it work
 This library hijacks `register_notify_handler()`, `lcd_refresh_screen()` and `lcd_control_operate()`.
