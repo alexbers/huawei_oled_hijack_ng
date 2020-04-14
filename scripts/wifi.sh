@@ -211,6 +211,15 @@ function get_not_active_hosts(hosts)
 end
 
 
+function add_default_mac_filter_list(ssidKey)
+    ret, count = dm.GetObjNum("InternetGatewayDevice.X_Config.Wifi.Radio.{i}")
+    if ret == 0 and count < 10 then
+        for i=count+1,10,1 do
+            dm.AddObject("InternetGatewayDevice.X_Config.Wifi.Radio.1.Ssid.1.MacFilter.List.")
+        end
+    end
+end
+
 function get_ssid_blocked_mac_info(ssidkey)
     local ban_info = {}
 
@@ -240,12 +249,13 @@ function get_ssid_blocked_mac_info(ssidkey)
     return ban_info
 end
 
-function get_mac_blocked_info_by_radio(radioindex)
+function init_and_get_mac_blocked_info_by_radio(radioindex)
     local ssidkey = "InternetGatewayDevice.X_Config.Wifi.Radio."..radioindex..".Ssid.{i}"
     local errorcode, ssidnum, array = dm.GetObjNum(ssidkey)
     local blocked_info_by_ssid_idx = {}
     for i=1,ssidnum,1 do
         local key = "InternetGatewayDevice.X_Config.Wifi.Radio."..radioindex..".Ssid."..i.."."
+        add_default_mac_filter_list(key)
         blocked_info_by_ssid_idx[i] = get_ssid_blocked_mac_info(key)
     end
     return blocked_info_by_ssid_idx
@@ -257,7 +267,7 @@ function get_ban_lists()
 
     local errorcode, radionum, array = dm.GetObjNum("InternetGatewayDevice.X_Config.Wifi.Radio.{i}")
     for i=1,radionum,1 do
-        blocked_info_by_radio_idx[i] = get_mac_blocked_info_by_radio(i)
+        blocked_info_by_radio_idx[i] = init_and_get_mac_blocked_info_by_radio(i)
     end
     return blocked_info_by_radio_idx
 end
