@@ -591,6 +591,8 @@ static uint8_t get_char_idx_and_go_next(uint8_t** text) {
             return 193;
         } else if (codepoint == 0xa0) {
             return ' '; // Instead of non-braking space
+        } else if (codepoint == 0xab || codepoint == 0xbb) {
+            return '"';
         } else {
             return '?';
         }

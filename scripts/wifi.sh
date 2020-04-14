@@ -427,6 +427,7 @@ if at_least_one_wifi_enabled() then
     print("text: Success")
 else
     print("text: Failed")
+    print("text: Try to reboot")
 end
 '
 
