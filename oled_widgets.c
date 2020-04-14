@@ -168,7 +168,7 @@ void main_init() {
 }
 
 void main_paint() {
-    const int lines_per_page = 7;
+    const int lines_per_page = is_small_screen ? 4 : 7;
 
     const int page_first_item = main_current_item / lines_per_page * lines_per_page;
 
@@ -188,7 +188,11 @@ void main_paint() {
     }
 
     if (page_first_item + lines_per_page < main_lines_num) {
-        put_small_text(20, 112, lcd_width, lcd_height, 255, 255, 255, SMALL_FONT_TRIANGLE);
+        if (is_small_screen) {
+            put_small_text(118, 54, lcd_width, lcd_height, 255, 255, 255, SMALL_FONT_TRIANGLE);
+        } else {
+            put_small_text(20, 112, lcd_width, lcd_height, 255, 255, 255, SMALL_FONT_TRIANGLE);
+        }
     }
 
 }
@@ -437,18 +441,32 @@ uint8_t mobile_val_to_y(int32_t val) {
             val = -105;
         }
 
-        uint8_t y = -(val + 51) * 2;
+        uint8_t y;
+        if (is_small_screen) {
+            y = -(val + 51);
+        } else {
+            y = -(val + 51) * 2;
+        }
         return y;
 }
 
 uint32_t mobile_y_to_val(uint8_t y) {
-    return -y/2 - 51;
+    if (is_small_screen) {
+        return -y - 51;
+    } else {
+        return -y/2 - 51;
+    }
 }
 
 
 void mobile_signal_graph_paint() {
-    put_small_text(8, 113, lcd_width, lcd_height, 255, 255, 255, "RSSI");
-    mobile_print_val_colorized(53, 109, -65, -75, -85, mobile_rssi, "dBm");
+    if (is_small_screen) {
+        put_small_text(8, 51, lcd_width, lcd_height, 255, 255, 255, "RSSI");
+        mobile_print_val_colorized(53, 47, -65, -75, -85, mobile_rssi, "dBm");
+    } else {
+        put_small_text(8, 113, lcd_width, lcd_height, 255, 255, 255, "RSSI");
+        mobile_print_val_colorized(53, 109, -65, -75, -85, mobile_rssi, "dBm");
+    }
 
     uint32_t prev_val = 0;
 
@@ -495,7 +513,7 @@ void mobile_switch_mode() {
 // ---------------------------- COMMON EXTERNAL MENU FUNCTIONS -------------------------
 const uint8_t MAXMENUITEMS = 128;
 const int MAXITEMLEN = 64;
-const int LINES_PER_PAGE = 7;
+int lines_per_page = 7;
 
 void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
     char *saveptr;
@@ -505,8 +523,8 @@ void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
     char *line = strtok_r(buf, "\n", &saveptr);
     while(line) {
         if (strncmp(line, "pagebreak:", 10) == 0) {
-            int items_to_insert = LINES_PER_PAGE - (item % LINES_PER_PAGE);
-            if (items_to_insert == LINES_PER_PAGE) {
+            int items_to_insert = lines_per_page - (item % lines_per_page);
+            if (items_to_insert == lines_per_page) {
                 items_to_insert = 0;
             }
             for (int i = 0; i < items_to_insert; i += 1) {
@@ -564,6 +582,7 @@ clear_rest_items:
 }
 
 void init_menu(uint8_t* curr_item, char items[][MAXITEMLEN]) {
+    lines_per_page = is_small_screen ? 4 : 7;
     *curr_item = 0;
     strcpy(items[0], "item:<- Back:");
     for (int i = 1; i < MAXMENUITEMS; i += 1) {
@@ -572,8 +591,8 @@ void init_menu(uint8_t* curr_item, char items[][MAXITEMLEN]) {
 }
 
 void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
-    int first_item_on_page = *curr_item / LINES_PER_PAGE * LINES_PER_PAGE;
-    int last_item_to_consider = first_item_on_page + 2*LINES_PER_PAGE - 1;
+    int first_item_on_page = *curr_item / lines_per_page * lines_per_page;
+    int last_item_to_consider = first_item_on_page + 2*lines_per_page - 1;
 
     for(*curr_item += 1; *curr_item < last_item_to_consider; *curr_item += 1) {
         if (items[*curr_item][0] == 0 || *curr_item >= MAXMENUITEMS) {
@@ -583,7 +602,7 @@ void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
 
         // before the wrap, check if we saw the last page
         if (*curr_item+1 < MAXMENUITEMS && items[*curr_item+1][0] == 0 &&
-            (*curr_item - first_item_on_page ) >= LINES_PER_PAGE) {
+            (*curr_item - first_item_on_page ) >= lines_per_page) {
             break;
         }
         if(strncmp(items[*curr_item], "item:", 5) == 0) {
@@ -597,11 +616,11 @@ void next_menu_item(uint8_t* curr_item, char items[][MAXITEMLEN]) {
 }
 
 void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
-    const int page_first_item = curr_item / LINES_PER_PAGE * LINES_PER_PAGE;
+    const int page_first_item = curr_item / lines_per_page * lines_per_page;
 
     int i;
     for (i = 0;
-         i < LINES_PER_PAGE && (page_first_item + i) < MAXMENUITEMS && items[page_first_item + i][0];
+         i < lines_per_page && (page_first_item + i) < MAXMENUITEMS && items[page_first_item + i][0];
          i += 1)
     {
         char cur_line[MAXITEMLEN];
@@ -642,8 +661,12 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
         put_small_text(x, y, lcd_width, lcd_height, 255,255,255, item_text);
     }
 
-    if (i == LINES_PER_PAGE && (i+page_first_item) < MAXMENUITEMS && items[page_first_item + i][0]) {
-        put_small_text(20, 112, lcd_width, lcd_height, 255, 255, 255, SMALL_FONT_TRIANGLE);
+    if (i == lines_per_page && (i+page_first_item) < MAXMENUITEMS && items[page_first_item + i][0]) {
+        if (is_small_screen) {
+            put_small_text(118, 54, lcd_width, lcd_height, 255, 255, 255, SMALL_FONT_TRIANGLE);
+        } else {
+            put_small_text(20, 112, lcd_width, lcd_height, 255, 255, 255, SMALL_FONT_TRIANGLE);
+        }
     }
 }
 
@@ -1287,8 +1310,8 @@ void (*snake_nextnext_sched_action)() = 0;
 int snake_score = 0;
 
 uint32_t snake_len = 0;
-const uint32_t SNAKE_FIELD_WIDTH = 16;
-const uint32_t SNAKE_FIELD_HEIGHT = 14;
+uint32_t snake_field_width = 16;
+uint32_t snake_field_height = 14;
 const uint32_t SNAKE_MAX_LEN = 16 * 16;
 const uint32_t SNAKE_SQUARE_SIZE = 8;
 const uint32_t SNAKE_SCORE_SPACE = 16;
@@ -1305,8 +1328,8 @@ void snake_place_goal() {
     const int max_tries = SNAKE_MAX_LEN * 10;
     for (int i = 0; i < max_tries; i += 1) {
         int8_t pos_good = 1;
-        goal_pos.x = rand() % SNAKE_FIELD_WIDTH;
-        goal_pos.y = rand() % SNAKE_FIELD_HEIGHT;
+        goal_pos.x = rand() % snake_field_width;
+        goal_pos.y = rand() % snake_field_height;
 
         for (uint32_t j = 0; j < snake_len; j += 1) {
             if(goal_pos.x == snake[j].x && goal_pos.y == snake[j].y) {
@@ -1350,8 +1373,8 @@ void snake_tick() {
         }
     }
 
-    if (next_head.x < 0 || next_head.x >= SNAKE_FIELD_WIDTH ||
-        next_head.y < 0 || next_head.y >= SNAKE_FIELD_HEIGHT) {
+    if (next_head.x < 0 || next_head.x >= snake_field_width ||
+        next_head.y < 0 || next_head.y >= snake_field_height) {
         snake_dead = 1;
     }
 
@@ -1380,15 +1403,18 @@ void snake_tick() {
 }
 
 void snake_init() {
+    snake_field_width = 16;
+    snake_field_height = is_small_screen ? 6 : 14;
+
     snake_dead = 0;
     snake_direction = 0;
     snake_next_sched_action = 0;
     snake_nextnext_sched_action = 0;
     snake_score = 0;
     snake_len = 3;
-    snake[0].x = 5; snake[0].y = 8;
-    snake[1].x = 4; snake[1].y = 8;
-    snake[2].x = 3; snake[2].y = 8;
+    snake[0].x = 5; snake[0].y = 5;
+    snake[1].x = 4; snake[1].y = 5;
+    snake[2].x = 3; snake[2].y = 5;
     snake_place_goal();
 
     snake_timer = timer_create_ex(200, 1, snake_tick, 0);
@@ -1418,6 +1444,11 @@ void snake_paint() {
     }
     put_rect(goal_pos.x * SNAKE_SQUARE_SIZE, SNAKE_SCORE_SPACE + goal_pos.y * SNAKE_SQUARE_SIZE,
              SNAKE_SQUARE_SIZE, SNAKE_SQUARE_SIZE, 255, 0, 0);
+    if (is_small_screen) {
+        put_rect(0, 63, lcd_width, 1, 255, 255, 255);
+        put_rect(0, SNAKE_SCORE_SPACE - 1, 1, lcd_height, 255, 255, 255);
+        put_rect(lcd_width - 1, SNAKE_SCORE_SPACE - 1, 1, lcd_height, 255, 255, 255);
+    }
 }
 
 void snake_turn_left() {

@@ -22,6 +22,7 @@
 
 extern uint8_t lcd_width;
 extern uint8_t lcd_height;
+extern uint8_t is_small_screen;
 
 struct lcd_screen {
     uint32_t sx;
