@@ -12,6 +12,8 @@
 
 #include "oled.h"
 
+extern uint8_t is_small_screen;
+
 extern struct lcd_screen secret_screen;
 static uint8_t is_secret_screen_active = 0;
 
@@ -21,6 +23,8 @@ extern struct led_widget *widgets;
 extern void reset_widgets();
 extern void dispatch_power_key();
 extern void dispatch_menu_key();
+
+extern void switch_to_small_screen_mode();
 
 /*
  * Real handlers from oled binary and libraries
@@ -60,7 +64,12 @@ int notify_handler_async(int subsystemid, int action, int subaction) {
             reset_widgets();
             send_msg(UI_MENU_EXIT);
             // force restarting the led brightness timer if already fired
-            notify_handler_async_real(SUBSYSTEM_GPIO, BUTTON_POWER, 0);
+            if (!is_small_screen) {
+                notify_handler_async_real(SUBSYSTEM_GPIO, BUTTON_POWER, 0);
+            } else {
+                notify_handler_async_real(SUBSYSTEM_GPIO, BUTTON_MENU, 0);
+            }
+
             return 0;
         }
 
@@ -104,6 +113,11 @@ void lcd_refresh_screen(struct lcd_screen* screen) {
     }
     if (is_secret_screen_active && screen != &secret_screen) {
         return;
+    }
+    if (!is_secret_screen_active && screen && screen->buf_len == 1024) {
+        if (!is_small_screen) {
+            switch_to_small_screen_mode();
+        }
     }
     lcd_refresh_screen_real(screen);
 }

@@ -5,12 +5,64 @@
 #include "oled.h"
 #include "oled_font.h"
 
-uint16_t secret_screen_buf[LCD_WIDTH*LCD_HEIGHT] = {};
+uint8_t is_small_screen = 0;
+uint8_t lcd_width = LCD_MAX_WIDTH;
+uint8_t lcd_height = LCD_MAX_HEIGHT;
 
-struct lcd_screen secret_screen = {1, 128, 1, 128, LCD_WIDTH*LCD_HEIGHT*sizeof(uint16_t), secret_screen_buf};
+uint16_t secret_screen_buf[LCD_MAX_WIDTH*LCD_MAX_HEIGHT] = {};
+
+struct lcd_screen secret_screen = {1, 128, 1, 128, LCD_MAX_WIDTH*LCD_MAX_HEIGHT*sizeof(uint16_t), secret_screen_buf};
+
+void switch_to_small_screen_mode() {
+    if (is_small_screen == 1) {
+        return;
+    }
+    is_small_screen = 1;
+    lcd_width = 128;
+    lcd_height = 64;
+
+    secret_screen.sx = 0;
+    secret_screen.height = lcd_height;
+    secret_screen.sy = 0;
+    secret_screen.width = lcd_width;
+    const int BITS_IN_BYTE = 8;
+    secret_screen.buf_len = (lcd_width * lcd_height) / BITS_IN_BYTE;
+}
+
+void put_small_screen_pixel(uint8_t x, uint8_t y, uint8_t iswhite) {
+    if (x >= lcd_width || y >= lcd_height) {
+        return;
+    }
+
+    const int BITS_IN_BYTE = 8;
+    uint16_t offset = (y * lcd_width + x) / (BITS_IN_BYTE * sizeof(uint16_t));
+
+    uint8_t bit_num = 0;
+    uint8_t remainder = x % (BITS_IN_BYTE * sizeof(uint16_t));
+
+    if (remainder < 8) {
+        bit_num = 7 - remainder;
+    } else {
+        bit_num = 15 - (remainder-8);
+    }
+
+    if (iswhite) {
+        secret_screen_buf[offset] |= 1<<bit_num;
+    } else {
+        secret_screen_buf[offset] &= ~(1<<bit_num);
+    }
+}
 
 void put_pixel(uint8_t x, uint8_t y, uint8_t red, uint8_t green, uint8_t blue) {
-    if (x >= LCD_WIDTH || y >= LCD_HEIGHT) {
+    if (x >= lcd_width || y >= lcd_height) {
+        return;
+    }
+    if (is_small_screen) {
+        if (red || green || blue) {
+            put_small_screen_pixel(x, y, 1);
+        } else {
+            put_small_screen_pixel(x, y, 0);
+        }
         return;
     }
     // truncate
@@ -111,8 +163,8 @@ void put_large_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h,
 }
 
 void put_raw_buffer(uint8_t* from, uint32_t len) {
-    if (len > LCD_HEIGHT * LCD_WIDTH * sizeof(uint16_t)) {
-        len = LCD_HEIGHT * LCD_WIDTH * sizeof(uint16_t);
+    if (len > lcd_height * lcd_width * sizeof(uint16_t)) {
+        len = lcd_height * lcd_width * sizeof(uint16_t);
     }
 
     memcpy(secret_screen_buf, from, len);

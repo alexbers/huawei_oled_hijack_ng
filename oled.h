@@ -12,13 +12,16 @@
 #define BUTTON_MENU 9
 #define BUTTON_LONGMENU 15
 
-#define LCD_WIDTH 128
-#define LCD_HEIGHT 128
-#define LCD_BUF_SIZE (LCD_WIDTH * LCD_HEIGHT * sizeof(int16_t))
+#define LCD_MAX_WIDTH 128
+#define LCD_MAX_HEIGHT 128
+#define LCD_BUF_SIZE (LCD_MAX_WIDTH * LCD_MAX_HEIGHT * sizeof(int16_t))
 
 #define LED_ON 100
 #define LED_DIM 101
 #define LED_SLEEP 102
+
+extern uint8_t lcd_width;
+extern uint8_t lcd_height;
 
 struct lcd_screen {
     uint32_t sx;

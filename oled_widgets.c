@@ -71,7 +71,7 @@ void reschedule_lcd_timer() {
 }
 
 void clear_screen() {
-    put_rect(0, 0, LCD_WIDTH, LCD_HEIGHT, 0, 0, 0);
+    put_rect(0, 0, lcd_width, lcd_height, 0, 0, 0);
 }
 
 void repaint() {
@@ -181,14 +181,14 @@ void main_paint() {
         }
 
         if (page_first_item + i == main_current_item) {
-            put_small_text(4, y, LCD_WIDTH, LCD_HEIGHT, 255,0,255, "#");
+            put_small_text(4, y, lcd_width, lcd_height, 255,0,255, "#");
         }
 
-        put_small_text(20, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, cur_line);
+        put_small_text(20, y, lcd_width, lcd_height, 255,255,255, cur_line);
     }
 
     if (page_first_item + lines_per_page < main_lines_num) {
-        put_small_text(20, 112, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
+        put_small_text(20, 112, lcd_width, lcd_height, 255, 255, 255, SMALL_FONT_TRIANGLE);
     }
 
 }
@@ -370,7 +370,7 @@ void mobile_print_val_colorized(int x, int y, int thresh1, int thresh2, int thre
         r = 255; g = 0; b = 0;
     }
 
-    put_large_text(x, y, LCD_WIDTH, LCD_HEIGHT, r, g, b, buf);
+    put_large_text(x, y, lcd_width, lcd_height, r, g, b, buf);
 }
 
 void mobile_put_pixel_colorized(int x, int y, int thresh1, int thresh2, int thresh3, int val) {
@@ -390,32 +390,32 @@ void mobile_put_pixel_colorized(int x, int y, int thresh1, int thresh2, int thre
 }
 
 void mobile_signal_text_paint() {
-    put_small_text(8, 8, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSSI");
+    put_small_text(8, 8, lcd_width, lcd_height, 255, 255, 255, "RSSI");
     mobile_print_val_colorized(53, 4, -65, -75, -85, mobile_rssi, "dBm");
 
     if (mobile_rsrp != 0) {
-        put_small_text(8, 28, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSRP");
+        put_small_text(8, 28, lcd_width, lcd_height, 255, 255, 255, "RSRP");
         mobile_print_val_colorized(53, 24, -84, -102, -111, mobile_rsrp, "dBm");
     } else if (mobile_rscp != 0) {
-        put_small_text(8, 28, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSCP");
+        put_small_text(8, 28, lcd_width, lcd_height, 255, 255, 255, "RSCP");
         mobile_print_val_colorized(53, 24, -65, -75, -85, mobile_rscp, "dBm");
     }
 
     if (mobile_rsrq != 0) {
-        put_small_text(8, 48, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSRQ");
+        put_small_text(8, 48, lcd_width, lcd_height, 255, 255, 255, "RSRQ");
         mobile_print_val_colorized(53, 44, -5, -9, -12, mobile_rsrq, "dB");
     } else if (mobile_ecio != 0) {
-        put_small_text(8, 48, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "EC/IO");
+        put_small_text(8, 48, lcd_width, lcd_height, 255, 255, 255, "EC/IO");
         mobile_print_val_colorized(53, 44, -6, -9, -12, mobile_ecio, "dB");
     }
 
     if (mobile_sinr != 0) {
-        put_small_text(8, 68, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "SINR");
+        put_small_text(8, 68, lcd_width, lcd_height, 255, 255, 255, "SINR");
         mobile_print_val_colorized(53, 64, 12, 10, 7, mobile_sinr, "dB");
     }
 
     if (mobile_ul_bw != 0 && mobile_dl_bw != 0) {
-        put_small_text(8, 88, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "BW");
+        put_small_text(8, 88, lcd_width, lcd_height, 255, 255, 255, "BW");
         mobile_print_val_colorized(53, 84, 12, 10, 7, (mobile_ul_bw+mobile_dl_bw) / 2, "Mhz");
     }
 
@@ -423,8 +423,8 @@ void mobile_signal_text_paint() {
         char buf[256];
         snprintf(buf, 256, "B%d", mobile_band);
 
-        put_small_text(8, 108, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Band");
-        put_large_text(53, 104, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, buf);
+        put_small_text(8, 108, lcd_width, lcd_height, 255, 255, 255, "Band");
+        put_large_text(53, 104, lcd_width, lcd_height, 255, 255, 255, buf);
     }
 }
 
@@ -447,13 +447,13 @@ uint32_t mobile_y_to_val(uint8_t y) {
 
 
 void mobile_signal_graph_paint() {
-    put_small_text(8, 113, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "RSSI");
+    put_small_text(8, 113, lcd_width, lcd_height, 255, 255, 255, "RSSI");
     mobile_print_val_colorized(53, 109, -65, -75, -85, mobile_rssi, "dBm");
 
     uint32_t prev_val = 0;
 
     for (int i = 0; i < MAX_LAST_RSSI-1; i += 1) {
-        uint8_t x = LCD_WIDTH - i - 1;
+        uint8_t x = lcd_width - i - 1;
 
         if (last_rssi[i] == 0 || last_rssi[i + 1] == 0) {
             continue;
@@ -530,7 +530,7 @@ void make_items_from_buf(char* buf, char items[][MAXITEMLEN]) {
             }
         } else if (strncmp(line, "text:", 5) == 0) {
             for (uint32_t pos = strlen("text:"); pos < strlen(line); ) {
-                int w = get_bytes_num_fit_by_width(5, LCD_WIDTH, (uint8_t*)line+pos, SMALL_FONT_WIDTHS);
+                int w = get_bytes_num_fit_by_width(5, lcd_width, (uint8_t*)line+pos, SMALL_FONT_WIDTHS);
                 if(line[pos + w] != 0) {
                     char *last_space_ptr = memrchr(line+pos, ' ', w);
                     if (last_space_ptr) {
@@ -622,7 +622,7 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
         int is_item = (strcmp(item_type, "item") == 0);
 
         if (page_first_item + i == curr_item && is_item) {
-            put_small_text(5, y, LCD_WIDTH, LCD_HEIGHT, 255,0,255, "#");
+            put_small_text(5, y, lcd_width, lcd_height, 255,0,255, "#");
         }
 
         int8_t x;
@@ -639,11 +639,11 @@ void paint_menu(uint8_t curr_item, char items[][MAXITEMLEN]) {
             continue;
         }
 
-        put_small_text(x, y, LCD_WIDTH, LCD_HEIGHT, 255,255,255, item_text);
+        put_small_text(x, y, lcd_width, lcd_height, 255,255,255, item_text);
     }
 
     if (i == LINES_PER_PAGE && (i+page_first_item) < MAXMENUITEMS && items[page_first_item + i][0]) {
-        put_small_text(20, 112, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, SMALL_FONT_TRIANGLE);
+        put_small_text(20, 112, lcd_width, lcd_height, 255, 255, 255, SMALL_FONT_TRIANGLE);
     }
 }
 
@@ -962,29 +962,29 @@ void add_ssh_deinit() {
 
 void add_ssh_paint() {
     if (!add_ssh_is_success && !add_ssh_is_paused) {
-        put_small_text(7, 10, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Connect to me with");
-        put_small_text(7, 25, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "your SSH key as user:");
-        put_large_text(20, 45, LCD_WIDTH, LCD_HEIGHT, 0, 255, 0, add_ssh_pin);
-        put_small_text(5, 70, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Your key will be added");
+        put_small_text(7, 10, lcd_width, lcd_height, 255, 255, 255, "Connect to me with");
+        put_small_text(7, 25, lcd_width, lcd_height, 255, 255, 255, "your SSH key as user:");
+        put_large_text(20, 45, lcd_width, lcd_height, 0, 255, 0, add_ssh_pin);
+        put_small_text(5, 70, lcd_width, lcd_height, 255, 255, 255, "Your key will be added");
         if (add_ssh_tick_num % 4 == 0) {
-            put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 255, "Status: waiting...");
+            put_small_text(5, 97, lcd_width, lcd_height, 0, 255, 255, "Status: waiting...");
         } else if (add_ssh_tick_num % 4 == 1) {
-            put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 255, "Status: waiting");
+            put_small_text(5, 97, lcd_width, lcd_height, 0, 255, 255, "Status: waiting");
         } else if (add_ssh_tick_num % 4 == 2) {
-            put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 255, "Status: waiting.");
+            put_small_text(5, 97, lcd_width, lcd_height, 0, 255, 255, "Status: waiting.");
         } else if (add_ssh_tick_num % 4 == 3) {
-            put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 255, "Status: waiting..");
+            put_small_text(5, 97, lcd_width, lcd_height, 0, 255, 255, "Status: waiting..");
         }
     } else if (add_ssh_is_paused) {
-        put_small_text(3, 10, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "No connection detected");
-        put_small_text(7, 25, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press Power to retry");
-        put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 255, 0, 255, "Status: paused");
+        put_small_text(3, 10, lcd_width, lcd_height, 255, 255, 255, "No connection detected");
+        put_small_text(7, 25, lcd_width, lcd_height, 255, 255, 255, "Press Power to retry");
+        put_small_text(5, 97, lcd_width, lcd_height, 255, 0, 255, "Status: paused");
     } else if (add_ssh_is_failed) {
-        put_small_text(7, 25, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press Power to retry");
-        put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 255, 0, 0, "Status: error");
+        put_small_text(7, 25, lcd_width, lcd_height, 255, 255, 255, "Press Power to retry");
+        put_small_text(5, 97, lcd_width, lcd_height, 255, 0, 0, "Status: error");
     } else if (add_ssh_is_success) {
-        put_small_text(25, 30, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press any key");
-        put_small_text(5, 97, LCD_WIDTH, LCD_HEIGHT, 0, 255, 0, "Status: success");
+        put_small_text(25, 30, lcd_width, lcd_height, 255, 255, 255, "Press any key");
+        put_small_text(5, 97, lcd_width, lcd_height, 0, 255, 0, "Status: success");
     }
 }
 
@@ -1018,11 +1018,11 @@ void adbd_init() {
 
 void adbd_paint() {
     if (adbd_running) {
-        put_large_text(13, 35, LCD_WIDTH, LCD_HEIGHT, 0, 255, 0, "ADBD is ON");
-        put_small_text(7, 80, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press any key to stop");
+        put_large_text(13, 35, lcd_width, lcd_height, 0, 255, 0, "ADBD is ON");
+        put_small_text(7, 80, lcd_width, lcd_height, 255, 255, 255, "Press any key to stop");
     } else {
-        put_large_text(10, 35, LCD_WIDTH, LCD_HEIGHT, 255, 255, 0, "ADBD is OFF");
-        put_small_text(10, 80, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Press Power to start");
+        put_large_text(10, 35, lcd_width, lcd_height, 255, 255, 0, "ADBD is OFF");
+        put_small_text(10, 80, lcd_width, lcd_height, 255, 255, 255, "Press Power to start");
     }
 }
 
@@ -1051,7 +1051,7 @@ struct {
 
 void matrix_paint() {
     for (int i = 0; i < 20; i += 1) {
-        put_small_text(matrix_seq[i].x, matrix_seq[i].y, LCD_WIDTH, 255, 0, matrix_seq[i].green, 0, matrix_seq[i].str);
+        put_small_text(matrix_seq[i].x, matrix_seq[i].y, lcd_width, 255, 0, matrix_seq[i].green, 0, matrix_seq[i].str);
     }
 }
 
@@ -1059,8 +1059,8 @@ void matrix_tick() {
     // fprintf(stderr, "tick\n");
     for (int i = 0; i < 20; i += 1) {
         matrix_seq[i].y = (matrix_seq[i].y + matrix_seq[i].speed) % 256;
-        if(matrix_seq[i].y > LCD_HEIGHT && matrix_seq[i].y < LCD_HEIGHT + 15) {
-            matrix_seq[i].x = rand() % LCD_WIDTH;
+        if(matrix_seq[i].y > lcd_height && matrix_seq[i].y < lcd_height + 15) {
+            matrix_seq[i].x = rand() % lcd_width;
         }
     }
     repaint();
@@ -1270,11 +1270,11 @@ void video_paint() {
 
     if (video_welcome_mode) {
         char *msg = "Press MENU to start\n\nWarning:\n  Traffic is 768KB/sec\nDo not use in roaming";
-        put_small_text(7, 40, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, msg);
+        put_small_text(7, 40, lcd_width, lcd_height, 255, 255, 255, msg);
     } else if (video_not_connected_yet) {
-        put_small_text(7, 20, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Connecting...");
+        put_small_text(7, 20, lcd_width, lcd_height, 255, 255, 255, "Connecting...");
     } else if (video_socket < 0) {
-        put_small_text(7, 20, LCD_WIDTH, LCD_HEIGHT, 255, 255, 255, "Socket error");
+        put_small_text(7, 20, lcd_width, lcd_height, 255, 255, 255, "Socket error");
     }
 }
 
@@ -1409,8 +1409,8 @@ void snake_paint() {
         snprintf(buf, 32, "Score: %d", snake_score);
     }
 
-    put_small_text(5, 1, LCD_WIDTH, SNAKE_SCORE_SPACE, 255, 255, 255, buf);
-    put_rect(0, SNAKE_SCORE_SPACE - 1, LCD_WIDTH, 1, 255, 255, 255);
+    put_small_text(5, 1, lcd_width, SNAKE_SCORE_SPACE, 255, 255, 255, buf);
+    put_rect(0, SNAKE_SCORE_SPACE - 1, lcd_width, 1, 255, 255, 255);
 
     for (uint32_t i = 0; i < snake_len; i += 1) {
         put_rect(snake[i].x * SNAKE_SQUARE_SIZE, SNAKE_SCORE_SPACE + snake[i].y * SNAKE_SQUARE_SIZE,
