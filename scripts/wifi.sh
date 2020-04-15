@@ -600,8 +600,10 @@ print("text:Clients:")
 print("item:Active ("..table.getn(active_hosts).."):WIFI_ACTIVE_CLIENTS")
 print("item:Old ("..table.getn(not_active_hosts).."):WIFI_NOT_ACTIVE_CLIENTS")
 print("item:Banned (".. get_banned_mac_count() .. "):WIFI_BANNED_CLIENTS")
-
 print("pagebreak:")
+'
+
+WIFI_STATUS_DUAL_WIFI='
 print("text:5GHz+2Ghz:")
 if is_dbdc_enabled() == 1 then
     print("item:<On>:DUAL_WIFI_ON")
@@ -679,7 +681,15 @@ end
 
 
 if [ "$#" -eq 0 ]; then
-    echo "$WIFI_COMMON $WIFI_STATUS" | "${LUARUN}"
+    PRODUCT="$(cat /proc/productname)"
+    case "$PRODUCT" in
+        E5885*)
+            echo "$WIFI_COMMON $WIFI_STATUS" | "${LUARUN}"
+        ;;
+        *)
+            echo "$WIFI_COMMON $WIFI_STATUS $WIFI_STATUS_DUAL_WIFI" | "${LUARUN}"
+        ;;
+    esac
 fi
 
 if [ "$#" -eq 1 ]; then
