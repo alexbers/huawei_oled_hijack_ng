@@ -1129,8 +1129,9 @@ uint8_t video_not_connected_yet = 1;
 uint8_t video_reconnect_next_frame = 1;
 int video_ticks_without_data = 0;
 uint32_t video_serv_ip = 0;
+int video_frame_size = LCD_MAX_BUF_SIZE;
 
-uint8_t video_buf[LCD_BUF_SIZE];
+uint8_t video_buf[LCD_MAX_BUF_SIZE];
 uint32_t video_timer = 0;
 const int MAX_TICKS_WITHOUT_DATA = 100;
 
@@ -1235,11 +1236,11 @@ void video_next_frame() {
         }
     } else {
         if (video_socket == -1) {
+            int video_port = is_small_screen ? 7778 : 7777;
             video_ticks_without_data = 0;
 
-            const int RECV_BUF = LCD_BUF_SIZE * 100;
-            const int VIDEO_PORT = 7777;
-            video_socket = video_create_and_connect_socket(video_serv_ip, VIDEO_PORT, RECV_BUF);
+            int recv_buf = video_frame_size * 100;
+            video_socket = video_create_and_connect_socket(video_serv_ip, video_port, recv_buf);
             video_not_connected_yet = 0;
         }
         if (video_socket == -1) {
@@ -1247,7 +1248,7 @@ void video_next_frame() {
             return;
         }
 
-        video_try_get_new_data(&video_socket, video_buf, LCD_BUF_SIZE);
+        video_try_get_new_data(&video_socket, video_buf, video_frame_size);
     }
     repaint();
 }
@@ -1261,7 +1262,15 @@ void video_init() {
     video_serv_ip = 0;
     video_ticks_without_data = 0;
 
-    for(unsigned int i = 0; i < LCD_BUF_SIZE; i+=1) {
+    if (is_small_screen) {
+        const int BITS_PER_BYTE = 8;
+        video_frame_size = ((lcd_width * lcd_height) / BITS_PER_BYTE);
+    } else {
+        video_frame_size = ((lcd_width * lcd_height) * sizeof(int16_t));
+    }
+
+
+    for(unsigned int i = 0; i < LCD_MAX_BUF_SIZE; i+=1) {
         video_buf[i] = 0;
     }
     video_timer = timer_create_ex(31, 1, video_next_frame, 0);
@@ -1289,7 +1298,7 @@ void video_menu_key_pressed() {
 }
 
 void video_paint() {
-    put_raw_buffer(video_buf, LCD_BUF_SIZE);
+    put_raw_buffer(video_buf, video_frame_size);
 
     if (video_welcome_mode) {
         char *msg = "Press MENU to start\n\nWarning:\n  Traffic is 768KB/sec\nDo not use in roaming";

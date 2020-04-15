@@ -14,7 +14,7 @@
 
 #define LCD_MAX_WIDTH 128
 #define LCD_MAX_HEIGHT 128
-#define LCD_BUF_SIZE (LCD_MAX_WIDTH * LCD_MAX_HEIGHT * sizeof(int16_t))
+#define LCD_MAX_BUF_SIZE (LCD_MAX_WIDTH * LCD_MAX_HEIGHT * sizeof(int16_t))
 
 #define LED_ON 100
 #define LED_DIM 101
