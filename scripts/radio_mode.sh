@@ -1,13 +1,5 @@
 #!/system/bin/busybox sh
 
-NETWORK_AUTO='AT^SYSCFGEX="00",3FFFFFFF,2,2,7fffffffffffffff,,'
-NETWORK_GSM_ONLY='AT^SYSCFGEX="01",3FFFFFFF,2,2,7fffffffffffffff,,'
-NETWORK_UMTS_ONLY='AT^SYSCFGEX="02",3FFFFFFF,2,2,7fffffffffffffff,,'
-NETWORK_LTE_ONLY='AT^SYSCFGEX="03",3FFFFFFF,2,2,7fffffffffffffff,,'
-NETWORK_LTE_UMTS='AT^SYSCFGEX="0302",3FFFFFFF,2,2,7fffffffffffffff,,'
-NETWORK_LTE_GSM='AT^SYSCFGEX="0301",3FFFFFFF,2,2,7fffffffffffffff,,'
-NETWORK_UMTS_GSM='AT^SYSCFGEX="0201",3FFFFFFF,2,2,7fffffffffffffff,,'
-
 ATC="/system/xbin/atc"
 
 print_item () {
@@ -37,15 +29,15 @@ if [ "$#" -eq 0 ]; then
     print_item "3G or 2G" "0201" "$CURRENT_MODE" 0
 fi
 
+change_mode () {
+    local MODE="$1"
+    MODE_ENDING="$($ATC 'AT^SYSCFGEX?' | grep 'SYSCFGEX' | sed 's/[^0-9a-zA-Z=",^]//g' | sed 's/^[^"]*"[^"]*"//')"
+    $ATC "AT^SYSCFGEX=\"${MODE}\"${MODE_ENDING},," | grep OK
+}
+
 if [ "$#" -eq 1 ]; then
     case "$1" in
-        00   ) $ATC "$NETWORK_AUTO";;
-        01   ) $ATC "$NETWORK_GSM_ONLY";;
-        02   ) $ATC "$NETWORK_UMTS_ONLY";;
-        03   ) $ATC "$NETWORK_LTE_ONLY";;
-        0302 ) $ATC "$NETWORK_LTE_UMTS";;
-        0301 ) $ATC "$NETWORK_LTE_GSM";;
-        0201 ) $ATC "$NETWORK_UMTS_GSM";;
+        00 | 01 | 02 | 03 | 0302 | 0301 | 0201 ) change_mode "$1" ;;
         *) echo "text: wrong mode"; exit 1;; 
     esac
 
