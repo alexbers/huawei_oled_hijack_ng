@@ -1581,7 +1581,7 @@ struct led_widget widgets[WIDGETS_SIZE] = {
     },
     {
         .name = "mobile signal",
-        .lcd_sleep_ms = 600000,
+        .lcd_sleep_ms = 3600000,
         .init = mobile_signal_init,
         .deinit = mobile_signal_deinit,
         .paint = mobile_signal_paint,
