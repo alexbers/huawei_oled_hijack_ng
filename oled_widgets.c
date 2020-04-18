@@ -263,9 +263,28 @@ int32_t mobile_ecio = 0;
 int32_t mobile_ul_bw = 0;
 int32_t mobile_dl_bw = 0;
 int32_t mobile_band = 0;
+int32_t mobile_ca = -1;
 
 const int32_t MAX_LAST_RSSI = 128;
 int32_t last_rssi[MAX_LAST_RSSI] = {};
+
+int mobile_parse_ca(char *buf) {
+    char* saveptr = 0;
+
+    char *field = strtok_r(buf, ",", &saveptr);
+    while(field) {
+        int idx, ul_ca_on, dl_ca_on, ca_active;
+
+        if (sscanf(field, "\"%d %d %d %d\"", &idx, &ul_ca_on, &dl_ca_on, &ca_active) != 4) {
+            break;
+        }
+        if (ul_ca_on || dl_ca_on) {
+            return idx;
+        }
+        field = strtok_r(NULL, ",", &saveptr);
+    }
+    return -1;
+}
 
 void mobile_process_callback(int good, char *buf) {
     if (!good) {
@@ -273,7 +292,10 @@ void mobile_process_callback(int good, char *buf) {
     }
 
     mobile_rssi = mobile_rsrq = mobile_rsrp = mobile_sinr = mobile_rscp = mobile_ecio = 0;
-    mobile_ul_bw = mobile_dl_bw = 0;
+    mobile_ul_bw = mobile_dl_bw = mobile_band = 0;
+    mobile_ca = -1;
+
+    char ca_buf[128] = {0};
 
     int offset = 0;
 
@@ -302,6 +324,9 @@ void mobile_process_callback(int good, char *buf) {
             mobile_dl_bw = val;
         } else if (sscanf(&buf[offset], "<band>%d</band>", &val) == 1) {
             mobile_band = val;
+        } else if (strncmp(&buf[offset], "^LCACELL: ", strlen("^LCACELL: ")) == 0) {
+            strncpy(ca_buf, &buf[offset + strlen("^LCACELL: ")], 128);
+            mobile_ca = mobile_parse_ca(ca_buf);
         }
 
         while(buf[offset] != 0 && buf[offset] != '\n') {
@@ -325,7 +350,8 @@ void mobile_process_callback(int good, char *buf) {
 
 
 void update_measurements() {
-    create_process("/app/hijack/bin/device_webhook_client device signal 1 1", mobile_process_callback);
+    char* cmd = "/app/hijack/bin/device_webhook_client device signal 1 1;atc 'AT^LCACELL?'";
+    create_process(cmd, mobile_process_callback);
 }
 
 void init_measurements_callback(int isgood, char *buf) {
@@ -395,40 +421,44 @@ void mobile_put_pixel_colorized(int x, int y, int thresh1, int thresh2, int thre
 
 void mobile_signal_text_paint() {
     put_small_text(8, 8, lcd_width, lcd_height, 255, 255, 255, "RSSI");
-    mobile_print_val_colorized(53, 4, -65, -75, -85, mobile_rssi, "dBm");
+    mobile_print_val_colorized(48, 4, -65, -75, -85, mobile_rssi, "dBm");
 
     if (mobile_rsrp != 0) {
         put_small_text(8, 28, lcd_width, lcd_height, 255, 255, 255, "RSRP");
-        mobile_print_val_colorized(53, 24, -84, -102, -111, mobile_rsrp, "dBm");
+        mobile_print_val_colorized(48, 24, -84, -102, -111, mobile_rsrp, "dBm");
     } else if (mobile_rscp != 0) {
         put_small_text(8, 28, lcd_width, lcd_height, 255, 255, 255, "RSCP");
-        mobile_print_val_colorized(53, 24, -65, -75, -85, mobile_rscp, "dBm");
+        mobile_print_val_colorized(48, 24, -65, -75, -85, mobile_rscp, "dBm");
     }
 
     if (mobile_rsrq != 0) {
         put_small_text(8, 48, lcd_width, lcd_height, 255, 255, 255, "RSRQ");
-        mobile_print_val_colorized(53, 44, -5, -9, -12, mobile_rsrq, "dB");
+        mobile_print_val_colorized(48, 44, -5, -9, -12, mobile_rsrq, "dB");
     } else if (mobile_ecio != 0) {
         put_small_text(8, 48, lcd_width, lcd_height, 255, 255, 255, "EC/IO");
-        mobile_print_val_colorized(53, 44, -6, -9, -12, mobile_ecio, "dB");
+        mobile_print_val_colorized(48, 44, -6, -9, -12, mobile_ecio, "dB");
     }
 
     if (mobile_sinr != 0) {
         put_small_text(8, 68, lcd_width, lcd_height, 255, 255, 255, "SINR");
-        mobile_print_val_colorized(53, 64, 12, 10, 7, mobile_sinr, "dB");
+        mobile_print_val_colorized(48, 64, 12, 10, 7, mobile_sinr, "dB");
     }
 
     if (mobile_ul_bw != 0 && mobile_dl_bw != 0) {
         put_small_text(8, 88, lcd_width, lcd_height, 255, 255, 255, "BW");
-        mobile_print_val_colorized(53, 84, 12, 10, 7, (mobile_ul_bw+mobile_dl_bw) / 2, "Mhz");
+        mobile_print_val_colorized(48, 84, 12, 10, 7, (mobile_ul_bw+mobile_dl_bw) / 2, "Mhz");
     }
 
     if (mobile_band) {
         char buf[256];
-        snprintf(buf, 256, "B%d", mobile_band);
+        if (mobile_ca == -1) {
+            snprintf(buf, 256, "B%d", mobile_band);
+        } else {
+            snprintf(buf, 256, "B%d+CA%d", mobile_band, mobile_ca);
+        }
 
         put_small_text(8, 108, lcd_width, lcd_height, 255, 255, 255, "Band");
-        put_large_text(53, 104, lcd_width, lcd_height, 255, 255, 255, buf);
+        put_large_text(48, 104, lcd_width, lcd_height, 255, 255, 255, buf);
     }
 }
 
@@ -462,10 +492,10 @@ uint32_t mobile_y_to_val(uint8_t y) {
 void mobile_signal_graph_paint() {
     if (is_small_screen) {
         put_small_text(8, 51, lcd_width, lcd_height, 255, 255, 255, "RSSI");
-        mobile_print_val_colorized(53, 47, -65, -75, -85, mobile_rssi, "dBm");
+        mobile_print_val_colorized(48, 47, -65, -75, -85, mobile_rssi, "dBm");
     } else {
         put_small_text(8, 113, lcd_width, lcd_height, 255, 255, 255, "RSSI");
-        mobile_print_val_colorized(53, 109, -65, -75, -85, mobile_rssi, "dBm");
+        mobile_print_val_colorized(48, 109, -65, -75, -85, mobile_rssi, "dBm");
     }
 
     uint32_t prev_val = 0;
