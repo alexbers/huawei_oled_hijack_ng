@@ -252,7 +252,7 @@ void main_menu_key_pressed() {
 
 uint32_t mobile_timer = 0;
 
-uint8_t mobile_graph_mode = 1;
+uint8_t mobile_tab_num = 0;
 
 int32_t mobile_rssi = 0;
 int32_t mobile_rsrq = 0;
@@ -365,8 +365,9 @@ void init_measurements_callback(int isgood, char *buf) {
 void mobile_signal_init() {
     mobile_rssi = mobile_rsrq = mobile_rsrp = mobile_sinr = mobile_rscp = mobile_ecio = 0;
     mobile_ul_bw = mobile_dl_bw = mobile_band = 0;
+    mobile_ca = -1;
 
-    mobile_graph_mode = 1;
+    mobile_tab_num = 0;
     mobile_timer = 0;
 
     for (int i = 0; i < MAX_LAST_RSSI; i += 1) {
@@ -420,33 +421,48 @@ void mobile_put_pixel_colorized(int x, int y, int thresh1, int thresh2, int thre
 }
 
 void mobile_signal_text_paint() {
-    put_small_text(8, 8, lcd_width, lcd_height, 255, 255, 255, "RSSI");
-    mobile_print_val_colorized(48, 4, -65, -75, -85, mobile_rssi, "dBm");
+    int dy = 0;
+
+    if (is_small_screen) {
+        if (mobile_tab_num == 2) {
+            dy = 63;
+        }
+    }
+
+    const int H = 21;
+
+    put_small_text(8, (H*0)+6-dy, lcd_width, lcd_height, 255, 255, 255, "RSSI");
+    mobile_print_val_colorized(48, (H*0)+2-dy, -65, -75, -85, mobile_rssi, "dBm");
 
     if (mobile_rsrp != 0) {
-        put_small_text(8, 28, lcd_width, lcd_height, 255, 255, 255, "RSRP");
-        mobile_print_val_colorized(48, 24, -84, -102, -111, mobile_rsrp, "dBm");
+        put_small_text(8, (H*1)+6-dy, lcd_width, lcd_height, 255, 255, 255, "RSRP");
+        mobile_print_val_colorized(48, (H*1)+2-dy, -84, -102, -111, mobile_rsrp, "dBm");
     } else if (mobile_rscp != 0) {
-        put_small_text(8, 28, lcd_width, lcd_height, 255, 255, 255, "RSCP");
-        mobile_print_val_colorized(48, 24, -65, -75, -85, mobile_rscp, "dBm");
+        put_small_text(8, (H*1)+6-dy, lcd_width, lcd_height, 255, 255, 255, "RSCP");
+        mobile_print_val_colorized(48, (H*1)+2-dy, -65, -75, -85, mobile_rscp, "dBm");
     }
 
     if (mobile_rsrq != 0) {
-        put_small_text(8, 48, lcd_width, lcd_height, 255, 255, 255, "RSRQ");
-        mobile_print_val_colorized(48, 44, -5, -9, -12, mobile_rsrq, "dB");
+        put_small_text(8, (H*2)+6-dy, lcd_width, lcd_height, 255, 255, 255, "RSRQ");
+        mobile_print_val_colorized(48, (H*2)+2-dy, -5, -9, -12, mobile_rsrq, "dB");
     } else if (mobile_ecio != 0) {
-        put_small_text(8, 48, lcd_width, lcd_height, 255, 255, 255, "EC/IO");
-        mobile_print_val_colorized(48, 44, -6, -9, -12, mobile_ecio, "dB");
+        put_small_text(8, (H*2)+6-dy, lcd_width, lcd_height, 255, 255, 255, "EC/IO");
+        mobile_print_val_colorized(48, (H*2)+2-dy, -6, -9, -12, mobile_ecio, "dB");
+    }
+
+    if (is_small_screen && !mobile_sinr && !mobile_ul_bw && !mobile_dl_bw && !mobile_ul_bw) {
+        put_small_text(8, (H*3)+6-dy, lcd_width, lcd_height, 255, 255, 255, "No 4G Info");
+        return;
     }
 
     if (mobile_sinr != 0) {
-        put_small_text(8, 68, lcd_width, lcd_height, 255, 255, 255, "SINR");
-        mobile_print_val_colorized(48, 64, 12, 10, 7, mobile_sinr, "dB");
+        put_small_text(8, (H*3)+6-dy, lcd_width, lcd_height, 255, 255, 255, "SINR");
+        mobile_print_val_colorized(48, (H*3)+2-dy, 12, 10, 7, mobile_sinr, "dB");
     }
 
     if (mobile_ul_bw != 0 && mobile_dl_bw != 0) {
-        put_small_text(8, 88, lcd_width, lcd_height, 255, 255, 255, "BW");
-        mobile_print_val_colorized(48, 84, 12, 10, 7, (mobile_ul_bw+mobile_dl_bw) / 2, "Mhz");
+        put_small_text(8, (H*4)+6-dy, lcd_width, lcd_height, 255, 255, 255, "BW");
+        mobile_print_val_colorized(48, (H*4)+2-dy, 12, 10, 7, (mobile_ul_bw+mobile_dl_bw) / 2, "Mhz");
     }
 
     if (mobile_band) {
@@ -457,8 +473,8 @@ void mobile_signal_text_paint() {
             snprintf(buf, 256, "B%d+CA%d", mobile_band, mobile_ca);
         }
 
-        put_small_text(8, 108, lcd_width, lcd_height, 255, 255, 255, "Band");
-        put_large_text(48, 104, lcd_width, lcd_height, 255, 255, 255, buf);
+        put_small_text(8, (H*5)+6-dy, lcd_width, lcd_height, 255, 255, 255, "Band");
+        put_large_text(48, (H*5)+2-dy, lcd_width, lcd_height, 255, 255, 255, buf);
     }
 }
 
@@ -527,7 +543,7 @@ void mobile_signal_graph_paint() {
 
 
 void mobile_signal_paint() {
-    if (mobile_graph_mode) {
+    if (mobile_tab_num == 0) {
         mobile_signal_graph_paint();
     } else {
         mobile_signal_text_paint();
@@ -535,7 +551,11 @@ void mobile_signal_paint() {
 }
 
 void mobile_switch_mode() {
-    mobile_graph_mode = !mobile_graph_mode;
+    if (is_small_screen) {
+        mobile_tab_num = (mobile_tab_num + 1) % 3;
+    } else {
+        mobile_tab_num = (mobile_tab_num + 1) % 2;
+    }
     repaint();
 }
 
