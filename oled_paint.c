@@ -82,6 +82,26 @@ void put_pixel(uint8_t x, uint8_t y, uint8_t red, uint8_t green, uint8_t blue) {
     secret_screen_buf[y*128 + x] = color;
 }
 
+void put_line(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t red, uint8_t green, uint8_t blue) {
+    int dx = abs(x2-x1), sx = x1<x2 ? 1 : -1;
+    int dy = abs(y2-y1), sy = y1<y2 ? 1 : -1;
+
+    int err = (dx>dy ? dx : -dy)/2, e2;
+    for(;;){
+        put_pixel(x1, y1, red, green, blue);
+        if (x1==x2 && y1==y2) break;
+        e2 = err;
+        if (e2 >-dx) {
+            err -= dy;
+            x1 += sx;
+        }
+        if (e2 < dy) {
+            err += dx;
+            y1 += sy;
+        }
+    }
+}
+
 void put_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t green, uint8_t blue) {
     for (int p_y = y; p_y < y + h; p_y += 1) {
         for (int p_x = x; p_x < x + w; p_x += 1) {

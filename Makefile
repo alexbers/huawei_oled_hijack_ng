@@ -1,4 +1,4 @@
-CC = armv7a-linux-androideabi16-clang
+CC = armv7a-linux-androideabi19-clang
 
 all: oled_hijack.so device_webhook.so device_webhook_client sms_webhook.so sms_webhook_client
 
