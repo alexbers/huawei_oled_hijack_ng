@@ -21,6 +21,7 @@ extern int lcd_control_operate(int);
 extern int notify_handler_async(int subsystemid, int action, int subaction);
 
 extern void put_pixel(uint8_t x, uint8_t y, uint8_t red, uint8_t green, uint8_t blue);
+extern void put_line(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t red, uint8_t green, uint8_t blue);
 extern void put_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t green, uint8_t blue);
 extern void put_small_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t green, uint8_t blue, char *text);
 extern void put_large_text(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t red, uint8_t green, uint8_t blue, char *text);
@@ -151,6 +152,7 @@ char *main_lines[] = {
     "Radio mode",
     "SMS & USSD",
     "Wi-Fi",
+    "Speedtest",
     "TTL & IMEI",
     "Disable battery",
     "Add SSH key",
@@ -161,7 +163,7 @@ char *main_lines[] = {
     "User scripts",
 };
 
-char main_lines_num = 13;
+char main_lines_num = 14;
 
 void main_init() {
     main_current_item = 0;
@@ -237,6 +239,9 @@ void main_power_key_pressed() {
             break;
         case 12:
             enter_widget(12);
+            break;
+        case 13:
+            enter_widget(13);
             break;
     }
 }
@@ -934,6 +939,248 @@ void wifi_power_key_pressed() {
                       wifi_script, wifi_process_callback);
 }
 
+// ------------------------------------- SPEEDTEST ------------------------
+
+char* speedtest_cmd = "echo YES|HOME=/root /system/bin/busyboxx script -c '/system/xbin/speedtest -p -f json' /dev/null > /tmp/speedtest";
+const char* SPEEDTEST_FILE_NAME = "/tmp/speedtest";
+uint32_t speedtest_timer = 0;
+const int32_t MAX_LAST_SPEED_MEASUREMENTS = 512;
+float speedtest_download_bandwidths[MAX_LAST_SPEED_MEASUREMENTS] = {-1};
+float speedtest_upload_bandwidths[MAX_LAST_SPEED_MEASUREMENTS] = {-1};
+float speedtest_download_percentages[MAX_LAST_SPEED_MEASUREMENTS] = {-1};
+float speedtest_upload_percentages[MAX_LAST_SPEED_MEASUREMENTS] = {-1};
+
+void speedtest_process_callback(int isgood, char* buf) {
+    UNUSED(isgood);
+    UNUSED(buf);
+}
+
+
+void speedtest_parse_line(char *line_buf) {
+    char *download_info = strstr(line_buf, "\"type\":\"download\"");
+    char *upload_info = strstr(line_buf, "\"type\":\"upload\"");
+
+    char *bandwidth_info = strstr(line_buf, "\"bandwidth\":");
+    char *progress_info = strstr(line_buf, "\"progress\":");
+
+    if (!bandwidth_info || !progress_info) {
+        return;
+    }
+
+    uint32_t bandwidth = -1;
+    float progress = -1.0;
+
+    if (sscanf(bandwidth_info, "\"bandwidth\":%d", &bandwidth) != 1) {
+        return;
+    }
+    if (sscanf(progress_info, "\"progress\":%f", &progress) != 1) {
+        return;
+    }
+
+    double bandwidth_mbps = (double) bandwidth / 1000000 * 8;
+
+    if (download_info) {
+        for(int i = MAX_LAST_SPEED_MEASUREMENTS - 1; i > 0; i -= 1) {
+            speedtest_download_bandwidths[i] = speedtest_download_bandwidths[i - 1];
+            speedtest_download_percentages[i] = speedtest_download_percentages[i - 1];
+        }
+        speedtest_download_bandwidths[0] = bandwidth_mbps;
+        speedtest_download_percentages[0] = progress;
+    }
+
+    if (upload_info) {
+        for(int i = MAX_LAST_SPEED_MEASUREMENTS - 1; i > 0; i -= 1) {
+            speedtest_upload_bandwidths[i] = speedtest_upload_bandwidths[i - 1];
+            speedtest_upload_percentages[i] = speedtest_upload_percentages[i - 1];
+        }
+        speedtest_upload_bandwidths[0] = bandwidth_mbps;
+        speedtest_upload_percentages[0] = progress;
+    }
+}
+
+
+void speedtest_update() {
+    char *line_buf = NULL;
+    size_t line_buf_size = 0;
+    ssize_t line_size;
+
+    for (int i = 0; i < MAX_LAST_SPEED_MEASUREMENTS; i += 1) {
+        speedtest_download_bandwidths[i] = -1.0;
+        speedtest_upload_bandwidths[i] = -1.0;
+        speedtest_download_percentages[i] = -1.0;
+        speedtest_upload_percentages[i] = -1.0;
+    }
+
+    FILE* fp = fopen(SPEEDTEST_FILE_NAME, "r");
+    if (!fp) {
+        return;
+    }
+
+    line_size = getline(&line_buf, &line_buf_size, fp);
+
+    while (line_size >= 0) {
+        speedtest_parse_line(line_buf);
+        line_size = getline(&line_buf, &line_buf_size, fp);
+    }
+
+    free(line_buf);
+    fclose(fp);
+
+    repaint();
+}
+
+void speedtest_kill() {
+    create_process("killall -9 speedtest", speedtest_process_callback);
+    // wait up to a 1 sec for process finish
+    for (int i = 0; i < 100; i += 1) {
+        usleep( 10000 );
+        if (!process_is_alive()) {
+            break;
+        }
+    }
+    unlink(SPEEDTEST_FILE_NAME);
+}
+
+void speedtest_init() {
+    speedtest_timer = timer_create_ex(100, 1, speedtest_update, 0);
+
+    speedtest_kill();
+
+    for (int i = 0; i < MAX_LAST_SPEED_MEASUREMENTS; i += 1) {
+        speedtest_download_bandwidths[i] = -1.0;
+        speedtest_upload_bandwidths[i] = -1.0;
+        speedtest_download_percentages[i] = -1.0;
+        speedtest_upload_percentages[i] = -1.0;
+    }
+}
+
+
+void speedtest_deinit() {
+   if(speedtest_timer) {
+        timer_delete_ex(speedtest_timer);
+        speedtest_timer = 0;
+    }
+    speedtest_kill();
+}
+
+void speedtest_paint_graph(float percentages[], float bandwidths[], uint32_t max_bandwidth, uint8_t red, uint8_t green, uint8_t blue) {
+    uint8_t field_width = 104;
+    uint8_t field_height = 88;
+    if (is_small_screen) {
+        field_height = 24;
+    }
+
+    const uint8_t FIELD_XOFFSET = 22;
+    const uint8_t FIELD_YOFFSET = 7;
+
+    for (int i = 0; i < MAX_LAST_SPEED_MEASUREMENTS-1; i += 1) {
+        if (bandwidths[i] < 0 || bandwidths[i + 1] < 0) {
+            continue;
+        }
+
+        if (percentages[i] < 0 || percentages[i + 1] < 0) {
+            continue;
+        }
+
+        uint8_t x1 = FIELD_XOFFSET + (int)(percentages[i] * field_width + 0.5);
+        uint8_t x2 = FIELD_XOFFSET + (int)(percentages[i+1] * field_width + 0.5);
+
+        uint8_t y1 = FIELD_YOFFSET + field_height - (int)(bandwidths[i] / max_bandwidth * field_height + 0.5);
+        uint8_t y2 = FIELD_YOFFSET + field_height - (int)(bandwidths[i+1] / max_bandwidth * field_height + 0.5);
+
+        put_line(x1, y1, x2, y2, red, green, blue);
+    }
+}
+
+void speedtest_paint() {
+    if (speedtest_download_bandwidths[0] < 0) {
+        char *msg = "Press MENU to start\n\nWarning:\n  The test eats traffic\nDo not use in roaming";
+        put_small_text(7, 40, lcd_width, lcd_height, 255, 255, 255, msg);
+
+        if (process_is_alive()) {
+            put_small_text(6, 20, lcd_width, lcd_height, 255, 255, 255, "Waiting for data...");
+        }
+        return;
+    }
+
+    int max_mbps = 50;
+
+    for (int i = 0; i < MAX_LAST_SPEED_MEASUREMENTS-1; i += 1) {
+        while ((max_mbps < speedtest_download_bandwidths[i] || max_mbps < speedtest_upload_bandwidths[i]) && max_mbps < 1000) {
+            max_mbps += 50;
+        }
+    }
+
+    speedtest_paint_graph(speedtest_download_percentages, speedtest_download_bandwidths, max_mbps, 0, 255, 0);
+    speedtest_paint_graph(speedtest_upload_percentages, speedtest_upload_bandwidths, max_mbps, 255, 0, 0);
+
+    char dlbuf[32] = {};
+    char ulbuf[32] = {};
+
+    char tickbuf[32] = {};
+    snprintf(dlbuf, 32, "%.2fMbps", speedtest_download_bandwidths[0]);
+    if(speedtest_upload_bandwidths[0] > 0) {
+        snprintf(ulbuf, 32, "%.2fMbps", speedtest_upload_bandwidths[0]);
+    } else {
+        snprintf(ulbuf, 32, "wait...");
+    }
+
+    if (is_small_screen) {
+        for (int i = 0; i < 3; i += 1) {
+            snprintf(tickbuf, 32, "%3d", i * max_mbps/2);
+            put_small_text(0, 24-12*i, lcd_width, lcd_height, 255, 255, 255, tickbuf);
+        }
+    } else {
+        for (int i = 0; i < 5; i += 1) {
+            snprintf(tickbuf, 32, "%3d", i * max_mbps/4);
+            put_small_text(0, 88-22*i, lcd_width, lcd_height, 255, 255, 255, tickbuf);
+        }
+    }
+
+    if (is_small_screen) {
+        put_line(21, 5, 21, 33, 255, 255, 255);
+
+        put_line(20, 7, 22, 7, 255, 255, 255);
+        put_line(20, 7+12, 22, 7+12, 255, 255, 255);
+        put_line(20, 7+24, 22, 7+24, 255, 255, 255);
+    } else {
+        put_line(21, 5, 21, 97, 255, 255, 255);
+
+        put_line(20, 7, 22, 7, 255, 255, 255);
+        put_line(20, 7+22, 22, 7+22, 255, 255, 255);
+        put_line(20, 7+44, 22, 7+44, 255, 255, 255);
+        put_line(20, 7+66, 22, 7+66, 255, 255, 255);
+        put_line(20, 7+88, 22, 7+88, 255, 255, 255);
+    }
+
+    if (is_small_screen) {
+        put_small_text(4, 37, lcd_width, lcd_height, 0, 255, 0, "Download:");
+        put_small_text(60, 37, lcd_width, lcd_height, 255, 255, 255, dlbuf);
+        put_small_text(19, 49, lcd_width, lcd_height, 255, 0, 0, "Upload:");
+        put_small_text(60, 49, lcd_width, lcd_height, 255, 255, 255, ulbuf);
+    } else {
+        put_small_text(4, 101, lcd_width, lcd_height, 0, 255, 0, "Download:");
+        put_small_text(60, 101, lcd_width, lcd_height, 255, 255, 255, dlbuf);
+        put_small_text(19, 113, lcd_width, lcd_height, 255, 0, 0, "Upload:");
+        put_small_text(60, 113, lcd_width, lcd_height, 255, 255, 255, ulbuf);
+    }
+}
+
+void speedtest_menu_key_pressed() {
+    speedtest_kill();
+
+    for (int i = 0; i < MAX_LAST_SPEED_MEASUREMENTS; i += 1) {
+        speedtest_download_bandwidths[i] = -1.0;
+        speedtest_upload_bandwidths[i] = -1.0;
+        speedtest_download_percentages[i] = -1.0;
+        speedtest_upload_percentages[i] = -1.0;
+    }
+
+    create_process(speedtest_cmd, speedtest_process_callback);
+    repaint();
+}
+
+
 // ------------------------------------- TTL and IMEI --------------------------
 
 char* ttl_and_imei_script = "/app/hijack/scripts/ttl_and_imei.sh";
@@ -1614,7 +1861,7 @@ void user_scripts_power_key_pressed() {
     enter_widget(USER_CUSTOM_SCRIPT_IDX);
 }
 
-const uint32_t WIDGETS_SIZE = 14;
+const uint32_t WIDGETS_SIZE = 15;
 const uint32_t USER_CUSTOM_SCRIPT_IDX = WIDGETS_SIZE - 1;
 const uint32_t USER_CUSTOM_SCRIPTS_IDX = WIDGETS_SIZE - 2;
 
@@ -1667,6 +1914,16 @@ struct led_widget widgets[WIDGETS_SIZE] = {
         .paint = wifi_paint,
         .menu_key_handler = wifi_menu_key_pressed,
         .power_key_handler = wifi_power_key_pressed,
+        .parent_idx = 0
+    },
+    {
+        .name = "speedtest",
+        .lcd_sleep_ms = 3600000,
+        .init = speedtest_init,
+        .deinit = speedtest_deinit,
+        .paint = speedtest_paint,
+        .menu_key_handler = speedtest_menu_key_pressed,
+        .power_key_handler = leave_widget,
         .parent_idx = 0
     },
     {
