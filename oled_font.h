@@ -596,6 +596,30 @@ static uint8_t get_char_idx_and_go_next(uint8_t** text) {
         } else {
             return '?';
         }
+    } else if(cur < 240) {
+        // three bytes utf8
+        uint8_t cur2 = (*text)[0];
+        if(cur2 == 0) {
+            return 0;
+        } else if(cur2 < 128 || cur2 >= 192) {
+            return '?';
+        }
+        *text += 1;
+
+        uint8_t cur3 = (*text)[0];
+        if(cur3 == 0) {
+            return 0;
+        } else if(cur3 < 128 || cur3 >= 192) {
+            return '?';
+        }
+        *text += 1;
+
+        uint16_t codepoint = (cur - 224) * 64 * 64 + (cur2 - 128) * 64 + (cur3 - 128);
+        if (codepoint == 0x2013) {
+            return '-'; // Instead of dash
+        } else {
+            return '?';
+        }
     } else {
         // we do not support the rest of utf8 standard
         return '?';
